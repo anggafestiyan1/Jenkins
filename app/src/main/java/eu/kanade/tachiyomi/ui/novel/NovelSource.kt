@@ -33,6 +33,15 @@ object NovelSource {
         else -> "$BASE_URL/$url"
     }
 
+    // novelfull serves multiple thumbnail sizes; list rows use a small variant that looks
+    // cropped/letterboxed. The detail page ("book") cover uses this fixed larger-size hash, so
+    // swap the trailing size hash to fetch the full-size portrait cover for the grid too.
+    private val thumbSizeRegex = Regex("-[a-f0-9]{32}(\\.[A-Za-z0-9]+)$")
+    private const val DETAIL_COVER_SIZE = "-2239c49aee6b961904acf173b7e4602a"
+
+    private fun upscaleCover(url: String): String =
+        if (url.isBlank()) "" else thumbSizeRegex.replace(url) { "$DETAIL_COVER_SIZE${it.groupValues[1]}" }
+
     private fun parseList(doc: Document): List<NovelItem> {
         return doc.select("div.row").mapNotNull { row ->
             val a = row.selectFirst("h3.truyen-title a") ?: return@mapNotNull null
@@ -41,7 +50,7 @@ object NovelSource {
             NovelItem(
                 title = a.text().trim(),
                 url = abs(href),
-                coverUrl = abs(row.selectFirst("img.cover")?.attr("src").orEmpty()),
+                coverUrl = upscaleCover(abs(row.selectFirst("img.cover")?.attr("src").orEmpty())),
             )
         }
     }

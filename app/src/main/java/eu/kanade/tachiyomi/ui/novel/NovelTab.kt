@@ -143,7 +143,7 @@ private fun NovelBrowseContent(screenModel: NovelBrowseScreenModel) {
         )
         Box(Modifier.fillMaxSize()) {
             LazyVerticalGrid(
-                columns = GridCells.Adaptive(100.dp),
+                columns = GridCells.Adaptive(110.dp),
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(8.dp),
             ) {
@@ -185,7 +185,7 @@ private fun NovelFavoriteContent(active: Boolean) {
         CenterMessage(stringResource(AYMR.strings.label_novel_empty))
     } else {
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(100.dp),
+            columns = GridCells.Adaptive(110.dp),
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(8.dp),
         ) {
@@ -253,7 +253,7 @@ private fun NovelDownloadContent(active: Boolean) {
         CenterMessage(stringResource(AYMR.strings.label_novel_empty))
     } else {
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(100.dp),
+            columns = GridCells.Adaptive(110.dp),
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(8.dp),
         ) {
