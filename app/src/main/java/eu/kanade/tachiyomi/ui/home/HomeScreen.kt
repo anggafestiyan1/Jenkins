@@ -183,11 +183,7 @@ object HomeScreen : Screen() {
                             is Tab.History -> MangaLibraryTab
                             is Tab.Browse -> {
                                 if (it.toExtensions) {
-                                    if (!it.anime) {
-                                        BrowseTab.showExtension()
-                                    } else {
-                                        BrowseTab.showAnimeExtension()
-                                    }
+                                    BrowseTab.showExtension()
                                 }
                                 BrowseTab
                             }
