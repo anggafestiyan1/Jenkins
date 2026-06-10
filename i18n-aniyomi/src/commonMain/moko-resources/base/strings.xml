@@ -387,6 +387,16 @@
     <string name="label_saved">Saved</string>
     <string name="label_upload">Upload</string>
     <string name="label_recent">Recent</string>
+    <string name="label_novel">Novel</string>
+    <string name="label_novel_search_hint">Search novels…</string>
+    <string name="label_novel_load_more">Load more</string>
+    <string name="label_novel_empty">No novels</string>
+    <string name="label_novel_load_failed">Failed to load</string>
+    <string name="label_novel_retry">Retry</string>
+    <string name="label_novel_chapter_count">%d chapters</string>
+    <string name="label_novel_continue">Read</string>
+    <string name="label_novel_save">Save</string>
+    <string name="label_novel_saved">Saved</string>
     <string name="pref_bottom_nav_default">Default (show all tabs)</string>
     <string name="label_recent_anime_updates">Anime Updates</string>
     <string name="label_manga_sources">Manga Sources</string>

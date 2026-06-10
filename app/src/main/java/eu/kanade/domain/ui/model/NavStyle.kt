@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.ui.browse.BrowseTab
 import eu.kanade.tachiyomi.ui.library.anime.AnimeLibraryTab
 import eu.kanade.tachiyomi.ui.library.manga.MangaLibraryTab
 import eu.kanade.tachiyomi.ui.more.MoreTab
+import eu.kanade.tachiyomi.ui.novel.NovelTab
 import tachiyomi.i18n.aniyomi.AYMR
 
 enum class NavStyle(
@@ -39,6 +40,7 @@ enum class NavStyle(
             return mutableListOf(
                 AnimeLibraryTab,
                 MangaLibraryTab,
+                NovelTab,
                 BrowseTab,
                 MoreTab,
             ).apply { moreTab?.let { remove(it) } }
