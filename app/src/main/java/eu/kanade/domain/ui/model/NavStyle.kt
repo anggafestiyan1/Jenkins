@@ -13,7 +13,6 @@ import eu.kanade.tachiyomi.ui.browse.BrowseTab
 import eu.kanade.tachiyomi.ui.library.anime.AnimeLibraryTab
 import eu.kanade.tachiyomi.ui.library.manga.MangaLibraryTab
 import eu.kanade.tachiyomi.ui.more.MoreTab
-import eu.kanade.tachiyomi.ui.updates.UpdatesTab
 import tachiyomi.i18n.aniyomi.AYMR
 
 enum class NavStyle(
@@ -22,7 +21,7 @@ enum class NavStyle(
 ) {
     DEFAULT(titleRes = AYMR.strings.pref_bottom_nav_default, moreTab = null),
     MOVE_MANGA_TO_MORE(titleRes = AYMR.strings.pref_bottom_nav_no_manga, moreTab = MangaLibraryTab),
-    MOVE_UPDATES_TO_MORE(titleRes = AYMR.strings.pref_bottom_nav_no_updates, moreTab = UpdatesTab),
+    MOVE_UPDATES_TO_MORE(titleRes = AYMR.strings.pref_bottom_nav_no_updates, moreTab = null),
     MOVE_BROWSE_TO_MORE(titleRes = AYMR.strings.pref_bottom_nav_no_browse, moreTab = BrowseTab),
     ;
 
@@ -40,7 +39,6 @@ enum class NavStyle(
             return mutableListOf(
                 AnimeLibraryTab,
                 MangaLibraryTab,
-                UpdatesTab,
                 BrowseTab,
                 MoreTab,
             ).apply { moreTab?.let { remove(it) } }

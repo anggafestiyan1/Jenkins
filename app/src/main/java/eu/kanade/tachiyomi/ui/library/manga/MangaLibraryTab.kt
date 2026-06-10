@@ -24,6 +24,7 @@ import eu.kanade.tachiyomi.ui.history.combined.combinedHistoryTab
 import eu.kanade.tachiyomi.ui.history.downloads.DownloadsScreenModel
 import eu.kanade.tachiyomi.ui.history.downloads.downloadsTab
 import eu.kanade.tachiyomi.ui.main.MainActivity
+import eu.kanade.tachiyomi.ui.updates.manga.mangaUpdatesTab
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.channels.Channel
 import tachiyomi.i18n.aniyomi.AYMR
@@ -70,9 +71,15 @@ data object MangaLibraryTab : Tab {
         TabbedScreen(
             titleRes = AYMR.strings.label_komik_library,
             tabs = persistentListOf(
-                combinedHistoryTab(context, fromMore = false, screenModel = historyScreenModel),
+                // index 0: Library (no search)
                 mangaFavoriteInnerTab(),
+                // index 1: Updates for favorited manga (no search)
+                mangaUpdatesTab(context, fromMore = false),
+                // index 2 (even): History -> animeSearchQuery
+                combinedHistoryTab(context, fromMore = false, screenModel = historyScreenModel),
+                // index 3 (odd): Downloads -> mangaSearchQuery
                 downloadsTab(context, fromMore = false, screenModel = downloadsScreenModel),
+                // index 4: Download queue (no search)
                 mangaQueueInnerTab(queueScreenModel),
             ),
             mangaSearchQuery = downloadsSearchQuery,

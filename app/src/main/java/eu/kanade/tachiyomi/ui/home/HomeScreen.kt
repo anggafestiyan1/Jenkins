@@ -179,7 +179,7 @@ object HomeScreen : Screen() {
                         tabNavigator.current = when (it) {
                             is Tab.AnimeLib -> AnimeLibraryTab
                             is Tab.Library -> MangaLibraryTab
-                            is Tab.Updates -> UpdatesTab
+                            is Tab.Updates -> MangaLibraryTab
                             is Tab.History -> MangaLibraryTab
                             is Tab.Browse -> {
                                 if (it.toExtensions) {
