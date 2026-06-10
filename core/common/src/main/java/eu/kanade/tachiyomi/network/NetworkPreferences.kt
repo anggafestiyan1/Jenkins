@@ -13,7 +13,9 @@ class NetworkPreferences(
     }
 
     fun dohProvider(): Preference<Int> {
-        return preferenceStore.getInt("doh_provider", -1)
+        // Default to Cloudflare DoH so extension repos hosted on GitHub resolve even when the
+        // network's DNS blocks/slows raw.githubusercontent.com (common on some ISPs).
+        return preferenceStore.getInt("doh_provider", PREF_DOH_CLOUDFLARE)
     }
 
     fun defaultUserAgent(): Preference<String> {
