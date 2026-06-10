@@ -4,8 +4,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.automirrored.outlined.Label
+import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.GetApp
+import androidx.compose.material.icons.outlined.SettingsBackupRestore
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Settings
@@ -40,6 +42,8 @@ fun MoreScreen(
     onClickCategories: () -> Unit,
     onClickStats: () -> Unit,
     onClickStorage: () -> Unit,
+    onClickBackup: () -> Unit,
+    onClickRestore: () -> Unit,
     onClickSettings: () -> Unit,
     onClickAbout: () -> Unit,
 ) {
@@ -130,6 +134,20 @@ fun MoreScreen(
                     title = stringResource(AYMR.strings.label_storage_usage),
                     icon = Icons.Outlined.Storage,
                     onPreferenceClick = onClickStorage,
+                )
+            }
+            item {
+                TextPreferenceWidget(
+                    title = stringResource(MR.strings.pref_create_backup),
+                    icon = Icons.Outlined.Backup,
+                    onPreferenceClick = onClickBackup,
+                )
+            }
+            item {
+                TextPreferenceWidget(
+                    title = stringResource(MR.strings.pref_restore_backup),
+                    icon = Icons.Outlined.SettingsBackupRestore,
+                    onPreferenceClick = onClickRestore,
                 )
             }
 
