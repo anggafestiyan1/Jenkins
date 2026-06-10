@@ -19,8 +19,8 @@ import coil3.compose.AsyncImage
 @Composable
 fun NovelGridItem(
     item: NovelItem,
-    onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onClick: () -> Unit,
 ) {
     Column(
         modifier = modifier

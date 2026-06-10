@@ -1,42 +1,65 @@
 package eu.kanade.tachiyomi.ui.novel
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.items as columnItems
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
-import androidx.compose.material.icons.outlined.Bookmark
-import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.TabOptions
+import coil3.compose.AsyncImage
 import eu.kanade.presentation.util.Tab
+import kotlinx.coroutines.launch
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
 
@@ -53,84 +76,229 @@ data object NovelTab : Tab {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
-        val navigator = LocalNavigator.currentOrThrow
-        val screenModel = rememberScreenModel { NovelBrowseScreenModel() }
-        val state by screenModel.state.collectAsState()
-        val gridState = rememberLazyGridState()
+        val pagerState = androidx.compose.foundation.pager.rememberPagerState { 5 }
+        val scope = androidx.compose.runtime.rememberCoroutineScope()
+        val browseModel = rememberScreenModel { NovelBrowseScreenModel() }
+        val titles = listOf(
+            stringResource(AYMR.strings.label_recent),
+            stringResource(AYMR.strings.label_favorite),
+            stringResource(AYMR.strings.label_novel_browse),
+            stringResource(AYMR.strings.label_novel_downloaded),
+            stringResource(AYMR.strings.label_novel_queue),
+        )
 
         Scaffold(
             topBar = {
-                TopAppBar(
-                    title = {
-                        if (state.searchActive) {
-                            TextField(
-                                value = state.query,
-                                onValueChange = screenModel::onQueryChange,
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
-                                placeholder = { Text(stringResource(AYMR.strings.label_novel_search_hint)) },
-                                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                                    onSearch = { screenModel.submitSearch() },
-                                ),
-                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                                    imeAction = ImeAction.Search,
-                                ),
-                            )
-                        } else {
-                            Text(stringResource(AYMR.strings.label_novel))
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = screenModel::toggleSearch) {
-                            Icon(Icons.Outlined.Search, contentDescription = "Search")
-                        }
-                        IconButton(onClick = screenModel::toggleSavedMode) {
-                            Icon(
-                                imageVector = if (state.savedMode) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
-                                contentDescription = "Saved",
+                Column {
+                    TopAppBar(title = { Text(stringResource(AYMR.strings.label_novel)) })
+                    TabRow(selectedTabIndex = pagerState.currentPage) {
+                        titles.forEachIndexed { index, title ->
+                            Tab(
+                                selected = pagerState.currentPage == index,
+                                onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
+                                text = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             )
                         }
-                    },
-                )
+                    }
+                }
             },
         ) { contentPadding ->
-            val items = if (state.savedMode) state.saved else state.items
-            Box(modifier = Modifier.fillMaxSize().padding(contentPadding)) {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(110.dp),
-                    state = gridState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(8.dp),
-                ) {
-                    items(items, key = { it.url }) { item ->
-                        NovelGridItem(
-                            item = item,
-                            onClick = { navigator.push(NovelDetailScreen(item.url, item.title, item.coverUrl)) },
-                        )
-                    }
-                    if (!state.savedMode && state.canLoadMore && items.isNotEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            OutlinedButton(
-                                onClick = screenModel::loadMore,
-                                enabled = !state.isLoading,
-                                modifier = Modifier.fillMaxWidth().padding(8.dp),
-                            ) {
-                                Text(stringResource(AYMR.strings.label_novel_load_more))
-                            }
-                        }
-                    }
+            androidx.compose.foundation.pager.HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize().padding(contentPadding),
+            ) { page ->
+                val active = pagerState.currentPage == page
+                when (page) {
+                    0 -> NovelHistoryContent(active)
+                    1 -> NovelFavoriteContent(active)
+                    2 -> NovelBrowseContent(browseModel)
+                    3 -> NovelDownloadContent(active)
+                    else -> NovelQueueContent()
                 }
+            }
+        }
+    }
+}
 
-                if (state.isLoading && items.isEmpty()) {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NovelBrowseContent(screenModel: NovelBrowseScreenModel) {
+    val navigator = LocalNavigator.currentOrThrow
+    val state by screenModel.state.collectAsState()
+
+    Column(Modifier.fillMaxSize()) {
+        TextField(
+            value = state.query,
+            onValueChange = screenModel::onQueryChange,
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            singleLine = true,
+            placeholder = { Text(stringResource(AYMR.strings.label_novel_search_hint)) },
+            trailingIcon = {
+                IconButton(onClick = screenModel::submitSearch) {
+                    Icon(Icons.Outlined.Search, contentDescription = "Search")
                 }
-                if (!state.isLoading && items.isEmpty()) {
+            },
+            keyboardActions = KeyboardActions(onSearch = { screenModel.submitSearch() }),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        )
+        Box(Modifier.fillMaxSize()) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(8.dp),
+            ) {
+                items(state.items, key = { it.url }) { item ->
+                    NovelGridItem(item) {
+                        navigator.push(NovelDetailScreen(item.url, item.title, item.coverUrl))
+                    }
+                }
+                if (state.canLoadMore && state.items.isNotEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        OutlinedButton(
+                            onClick = screenModel::loadMore,
+                            enabled = !state.isLoading,
+                            modifier = Modifier.fillMaxWidth().padding(8.dp),
+                        ) { Text(stringResource(AYMR.strings.label_novel_load_more)) }
+                    }
+                }
+            }
+            if (state.isLoading && state.items.isEmpty()) {
+                CircularProgressIndicator(Modifier.align(Alignment.Center))
+            }
+            if (!state.isLoading && state.items.isEmpty()) {
+                Text(
+                    text = state.error ?: stringResource(AYMR.strings.label_novel_empty),
+                    modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NovelFavoriteContent(active: Boolean) {
+    val navigator = LocalNavigator.currentOrThrow
+    var items by remember { mutableStateOf(NovelStore.getSaved()) }
+    LaunchedEffect(active) { if (active) items = NovelStore.getSaved() }
+
+    if (items.isEmpty()) {
+        CenterMessage(stringResource(AYMR.strings.label_novel_empty))
+    } else {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(3),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(8.dp),
+        ) {
+            items(items, key = { it.url }) { item ->
+                NovelGridItem(item) {
+                    navigator.push(NovelDetailScreen(item.url, item.title, item.coverUrl))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NovelHistoryContent(active: Boolean) {
+    val navigator = LocalNavigator.currentOrThrow
+    var entries by remember { mutableStateOf(NovelStore.getHistory()) }
+    LaunchedEffect(active) { if (active) entries = NovelStore.getHistory() }
+
+    if (entries.isEmpty()) {
+        CenterMessage(stringResource(AYMR.strings.label_novel_empty))
+    } else {
+        LazyColumn(Modifier.fillMaxSize()) {
+            columnItems(entries, key = { it.novel.url }) { entry ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            navigator.push(
+                                NovelDetailScreen(
+                                    entry.novel.url,
+                                    entry.novel.title,
+                                    entry.novel.coverUrl,
+                                    autoResume = true,
+                                ),
+                            )
+                        }
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AsyncImage(
+                        model = entry.novel.coverUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(48.dp, 64.dp).clip(RoundedCornerShape(4.dp)),
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(entry.novel.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(entry.lastChapterName, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NovelDownloadContent(active: Boolean) {
+    val navigator = LocalNavigator.currentOrThrow
+    val context = LocalContext.current
+    var items by remember { mutableStateOf(NovelDownloader.getDownloaded(context)) }
+    LaunchedEffect(active) { if (active) items = NovelDownloader.getDownloaded(context) }
+
+    if (items.isEmpty()) {
+        CenterMessage(stringResource(AYMR.strings.label_novel_empty))
+    } else {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(3),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(8.dp),
+        ) {
+            items(items, key = { it.url }) { item ->
+                NovelGridItem(item) {
+                    navigator.push(NovelDetailScreen(item.url, item.title, item.coverUrl))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NovelQueueContent() {
+    val queue by NovelDownloadQueue.state.collectAsState()
+    if (queue.isEmpty()) {
+        CenterMessage(stringResource(AYMR.strings.label_novel_empty))
+    } else {
+        LazyColumn(Modifier.fillMaxSize()) {
+            columnItems(queue, key = { it.id }) { item ->
+                Column(Modifier.fillMaxWidth().padding(12.dp)) {
                     Text(
-                        text = state.error ?: stringResource(AYMR.strings.label_novel_empty),
-                        modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                        item.title,
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    LinearProgressIndicator(
+                        progress = { if (item.total > 0) item.done.toFloat() / item.total else 0f },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        text = "${item.done}/${item.total}",
+                        style = MaterialTheme.typography.bodySmall,
                     )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CenterMessage(message: String) {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(message, modifier = Modifier.padding(24.dp))
     }
 }

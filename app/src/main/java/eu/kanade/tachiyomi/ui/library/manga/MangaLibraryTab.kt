@@ -73,10 +73,11 @@ data object MangaLibraryTab : Tab {
             tabs = persistentListOf(
                 // index 0: Library (no search)
                 mangaFavoriteInnerTab(),
-                // index 1: Updates for favorited manga (no search)
-                mangaUpdatesTab(context, fromMore = false),
-                // index 2 (even): History -> animeSearchQuery
-                combinedHistoryTab(context, fromMore = false, screenModel = historyScreenModel),
+                // index 1: Updates for favorited manga (relabel; fork's label_updates == "Manga")
+                mangaUpdatesTab(context, fromMore = false).copy(titleRes = AYMR.strings.label_updates_title),
+                // index 2 (even): History -> animeSearchQuery (relabel; fork's label_history == "Manga")
+                combinedHistoryTab(context, fromMore = false, screenModel = historyScreenModel)
+                    .copy(titleRes = AYMR.strings.label_recent),
                 // index 3 (odd): Downloads -> mangaSearchQuery
                 downloadsTab(context, fromMore = false, screenModel = downloadsScreenModel),
                 // index 4: Download queue (no search)
