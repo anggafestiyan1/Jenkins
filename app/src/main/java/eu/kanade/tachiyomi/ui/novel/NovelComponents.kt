@@ -31,7 +31,8 @@ fun NovelGridItem(
         AsyncImage(
             model = item.coverUrl,
             contentDescription = item.title,
-            contentScale = ContentScale.Crop,
+            // Fit (not Crop) so the whole cover shows without being cut off.
+            contentScale = ContentScale.Fit,
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(0.66f)
