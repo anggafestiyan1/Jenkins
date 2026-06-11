@@ -25,6 +25,29 @@ object NovelStore {
 
     fun fontSize() = preferenceStore.getInt("novel_font_size", 18)
 
+    // ---- Reader appearance ----
+
+    // 0 = follow app, 1 = dark, 2 = sepia, 3 = black (AMOLED)
+    fun readerTheme() = preferenceStore.getInt("novel_reader_theme", 0)
+
+    // line height as a percent of font size (120..240)
+    fun lineSpacingPercent() = preferenceStore.getInt("novel_line_spacing", 150)
+
+    // 0 = default, 1 = serif, 2 = sans-serif
+    fun fontFamily() = preferenceStore.getInt("novel_font_family", 0)
+
+    fun keepScreenOn() = preferenceStore.getBoolean("novel_keep_screen_on", true)
+
+    // ---- Read chapters ----
+
+    private fun readPref(novelUrl: String) = preferenceStore.getStringSet("novel_read_${novelUrl.hashCode()}")
+
+    fun getReadChapters(novelUrl: String): Set<String> = readPref(novelUrl).get()
+
+    fun markRead(novelUrl: String, chapterUrl: String) {
+        readPref(novelUrl).getAndSet { it + chapterUrl }
+    }
+
     // ---- Saved / favorite ----
 
     fun getSaved(): List<NovelItem> = savedPref().get()

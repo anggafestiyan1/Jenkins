@@ -131,6 +131,9 @@ class NovelDetailScreen(
                 }
                 is NovelDetailScreenModel.State.Success -> {
                     val detail = s.detail
+                    val readChapters = NovelStore.getReadChapters(detail.url)
+                    val firstUnread = detail.chapters.indexOfFirst { it.url !in readChapters }
+                        .takeIf { it >= 0 } ?: 0
                     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = contentPadding) {
                         item {
                             Column(Modifier.padding(16.dp)) {
@@ -155,13 +158,10 @@ class NovelDetailScreen(
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Button(
                                         onClick = {
-                                            val lastUrl = screenModel.lastReadChapterUrl()
-                                            val index = detail.chapters.indexOfFirst { it.url == lastUrl }
-                                                .takeIf { it >= 0 } ?: 0
                                             if (detail.chapters.isNotEmpty()) {
                                                 navigator.push(
                                                     NovelReaderScreen(
-                                                        detail.url, detail.title, detail.coverUrl, detail.chapters, index,
+                                                        detail.url, detail.title, detail.coverUrl, detail.chapters, firstUnread,
                                                     ),
                                                 )
                                             }
@@ -199,9 +199,11 @@ class NovelDetailScreen(
                             HorizontalDivider()
                         }
                         items(detail.chapters, key = { it.url }) { chapter ->
+                            val isRead = chapter.url in readChapters
                             Text(
                                 text = chapter.name,
                                 style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (isRead) 0.4f else 1f),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier

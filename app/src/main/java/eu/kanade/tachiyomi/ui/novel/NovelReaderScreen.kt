@@ -1,11 +1,15 @@
 package eu.kanade.tachiyomi.ui.novel
 
 import android.app.Application
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -13,23 +17,37 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Stop
+import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -67,12 +85,33 @@ class NovelReaderScreen(
         val state by screenModel.state.collectAsState()
         val scrollState = rememberScrollState()
         val scope = rememberCoroutineScope()
+        var showSettings by remember { mutableStateOf(false) }
 
+        val (rawBg, rawText) = novelReaderColors(state.theme)
+        val bgColor = if (rawBg == Color.Unspecified) MaterialTheme.colorScheme.background else rawBg
+        val textColor = if (rawText == Color.Unspecified) MaterialTheme.colorScheme.onBackground else rawText
+
+        LaunchedEffect(state.index) { scope.launch { scrollState.scrollTo(0) } }
+
+        // Keep the screen awake while reading, if enabled.
+        val view = LocalView.current
+        DisposableEffect(state.keepScreenOn) {
+            view.keepScreenOn = state.keepScreenOn
+            onDispose { view.keepScreenOn = false }
+        }
+
+        // Text-to-speech (read aloud).
+        val context = androidx.compose.ui.platform.LocalContext.current
+        var isSpeaking by remember { mutableStateOf(false) }
+        val tts = remember { NovelTts(context) { isSpeaking = false } }
+        DisposableEffect(Unit) { onDispose { tts.shutdown() } }
         LaunchedEffect(state.index) {
-            scope.launch { scrollState.scrollTo(0) }
+            tts.stop()
+            isSpeaking = false
         }
 
         Scaffold(
+            containerColor = bgColor,
             topBar = {
                 TopAppBar(
                     title = {
@@ -87,6 +126,25 @@ class NovelReaderScreen(
                             Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
                         }
                     },
+                    actions = {
+                        IconButton(
+                            enabled = !state.isLoading && state.text.isNotBlank(),
+                            onClick = {
+                                if (isSpeaking) {
+                                    tts.stop()
+                                    isSpeaking = false
+                                } else {
+                                    tts.speak(state.text)
+                                    isSpeaking = true
+                                }
+                            },
+                        ) {
+                            Icon(
+                                imageVector = if (isSpeaking) Icons.Outlined.Stop else Icons.Outlined.VolumeUp,
+                                contentDescription = "Read aloud",
+                            )
+                        }
+                    },
                 )
             },
             bottomBar = {
@@ -99,45 +157,102 @@ class NovelReaderScreen(
                         IconButton(
                             onClick = screenModel::previous,
                             enabled = state.index > 0 && !state.isLoading,
-                        ) {
-                            Icon(Icons.Outlined.ChevronLeft, contentDescription = "Previous")
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            TextButton(onClick = { screenModel.changeFontSize(-1) }) { Text("A-") }
-                            Text("${state.fontSize}", style = MaterialTheme.typography.bodyMedium)
-                            TextButton(onClick = { screenModel.changeFontSize(+1) }) { Text("A+") }
+                        ) { Icon(Icons.Outlined.ChevronLeft, contentDescription = "Previous") }
+                        IconButton(onClick = { showSettings = true }) {
+                            Icon(Icons.Outlined.Settings, contentDescription = "Settings")
                         }
                         IconButton(
                             onClick = screenModel::next,
                             enabled = state.index < chapters.lastIndex && !state.isLoading,
-                        ) {
-                            Icon(Icons.Outlined.ChevronRight, contentDescription = "Next")
-                        }
+                        ) { Icon(Icons.Outlined.ChevronRight, contentDescription = "Next") }
                     }
                 }
             },
         ) { contentPadding ->
-            when {
-                state.isLoading -> Box(
-                    modifier = Modifier.fillMaxSize().padding(contentPadding),
-                    contentAlignment = Alignment.Center,
-                ) { CircularProgressIndicator() }
-                state.error != null -> Box(
-                    modifier = Modifier.fillMaxSize().padding(contentPadding).padding(24.dp),
-                    contentAlignment = Alignment.Center,
-                ) { Text(stringResource(AYMR.strings.label_novel_load_failed)) }
-                else -> Text(
-                    text = state.text,
-                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = state.fontSize.sp),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(scrollState)
-                        .padding(contentPadding)
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                )
+            Box(
+                modifier = Modifier.fillMaxSize().background(bgColor).padding(contentPadding),
+            ) {
+                when {
+                    state.isLoading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                    state.error != null -> Text(
+                        text = stringResource(AYMR.strings.label_novel_load_failed),
+                        color = textColor,
+                        modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                    )
+                    else -> Text(
+                        text = state.text,
+                        color = textColor,
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontSize = state.fontSize.sp,
+                            lineHeight = (state.fontSize * state.lineSpacing / 100f).sp,
+                            fontFamily = novelReaderFontFamily(state.fontFamily),
+                        ),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(scrollState)
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                    )
+                }
+            }
+        }
+
+        if (showSettings) {
+            ModalBottomSheet(onDismissRequest = { showSettings = false }) {
+                ReaderSettings(state = state, model = screenModel)
             }
         }
     }
+}
+
+@Composable
+private fun ReaderSettings(state: NovelReaderScreenModel.State, model: NovelReaderScreenModel) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("Tema", style = MaterialTheme.typography.titleSmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("Default", "Gelap", "Sepia", "Hitam").forEachIndexed { i, label ->
+                FilterChip(selected = state.theme == i, onClick = { model.setTheme(i) }, label = { Text(label) })
+            }
+        }
+        Text("Font", style = MaterialTheme.typography.titleSmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("Default", "Serif", "Sans").forEachIndexed { i, label ->
+                FilterChip(selected = state.fontFamily == i, onClick = { model.setFontFamily(i) }, label = { Text(label) })
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Ukuran teks", modifier = Modifier.weight(1f))
+            TextButton(onClick = { model.changeFontSize(-1) }) { Text("A-") }
+            Text("${state.fontSize}")
+            TextButton(onClick = { model.changeFontSize(+1) }) { Text("A+") }
+        }
+        Text("Jarak baris: ${state.lineSpacing}%", style = MaterialTheme.typography.titleSmall)
+        Slider(
+            value = state.lineSpacing.toFloat(),
+            onValueChange = { model.setLineSpacing(it.toInt()) },
+            valueRange = 120f..240f,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Layar tetap nyala", modifier = Modifier.weight(1f))
+            Switch(checked = state.keepScreenOn, onCheckedChange = { model.setKeepScreenOn(it) })
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+private fun novelReaderColors(theme: Int): Pair<Color, Color> = when (theme) {
+    1 -> Color(0xFF121212) to Color(0xFFE0E0E0)
+    2 -> Color(0xFFFBF0D9) to Color(0xFF5B4636)
+    3 -> Color(0xFF000000) to Color(0xFFCFCFCF)
+    else -> Color.Unspecified to Color.Unspecified
+}
+
+private fun novelReaderFontFamily(family: Int): FontFamily = when (family) {
+    1 -> FontFamily.Serif
+    2 -> FontFamily.SansSerif
+    else -> FontFamily.Default
 }
 
 class NovelReaderScreenModel(
@@ -153,7 +268,15 @@ class NovelReaderScreenModel(
     private val app: Application = Injekt.get()
 
     init {
-        mutableState.update { it.copy(fontSize = NovelStore.fontSize().get()) }
+        mutableState.update {
+            it.copy(
+                fontSize = NovelStore.fontSize().get(),
+                theme = NovelStore.readerTheme().get(),
+                lineSpacing = NovelStore.lineSpacingPercent().get(),
+                fontFamily = NovelStore.fontFamily().get(),
+                keepScreenOn = NovelStore.keepScreenOn().get(),
+            )
+        }
         loadChapter(state.value.index)
     }
 
@@ -171,6 +294,27 @@ class NovelReaderScreenModel(
         mutableState.update { it.copy(fontSize = newSize) }
     }
 
+    fun setTheme(theme: Int) {
+        NovelStore.readerTheme().set(theme)
+        mutableState.update { it.copy(theme = theme) }
+    }
+
+    fun setFontFamily(family: Int) {
+        NovelStore.fontFamily().set(family)
+        mutableState.update { it.copy(fontFamily = family) }
+    }
+
+    fun setLineSpacing(percent: Int) {
+        val p = percent.coerceIn(120, 240)
+        NovelStore.lineSpacingPercent().set(p)
+        mutableState.update { it.copy(lineSpacing = p) }
+    }
+
+    fun setKeepScreenOn(value: Boolean) {
+        NovelStore.keepScreenOn().set(value)
+        mutableState.update { it.copy(keepScreenOn = value) }
+    }
+
     private fun loadChapter(index: Int) {
         val chapter = chapters.getOrNull(index) ?: return
         screenModelScope.launchIO {
@@ -179,6 +323,7 @@ class NovelReaderScreenModel(
                 val text = NovelDownloader.localChapterText(app, novelUrl, index)
                     ?: NovelSource.chapterText(chapter.url)
                 NovelStore.setLastReadChapter(novelUrl, chapter.url)
+                NovelStore.markRead(novelUrl, chapter.url)
                 NovelStore.recordHistory(
                     NovelItem(title = novelTitle, url = novelUrl, coverUrl = novelCover),
                     chapter.url,
@@ -196,6 +341,10 @@ class NovelReaderScreenModel(
         val index: Int = 0,
         val text: String = "",
         val fontSize: Int = 18,
+        val theme: Int = 0,
+        val lineSpacing: Int = 150,
+        val fontFamily: Int = 0,
+        val keepScreenOn: Boolean = true,
         val isLoading: Boolean = true,
         val error: String? = null,
     )
