@@ -134,6 +134,7 @@ class NovelReaderScreen(
                                     tts.stop()
                                     isSpeaking = false
                                 } else {
+                                    tts.configure(state.ttsSpeed, state.ttsPitch, state.ttsLang)
                                     tts.speak(state.text)
                                     isSpeaking = true
                                 }
@@ -238,6 +239,29 @@ private fun ReaderSettings(state: NovelReaderScreenModel.State, model: NovelRead
             Text("Layar tetap nyala", modifier = Modifier.weight(1f))
             Switch(checked = state.keepScreenOn, onCheckedChange = { model.setKeepScreenOn(it) })
         }
+
+        Text("Suara (TTS)", style = MaterialTheme.typography.titleSmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("Default" to "", "English" to "en", "Indonesia" to "id").forEach { (label, tag) ->
+                FilterChip(
+                    selected = state.ttsLang == tag,
+                    onClick = { model.setTtsLang(tag) },
+                    label = { Text(label) },
+                )
+            }
+        }
+        Text("Kecepatan suara: ${state.ttsSpeed}%")
+        Slider(
+            value = state.ttsSpeed.toFloat(),
+            onValueChange = { model.setTtsSpeed(it.toInt()) },
+            valueRange = 50f..200f,
+        )
+        Text("Nada suara: ${state.ttsPitch}%")
+        Slider(
+            value = state.ttsPitch.toFloat(),
+            onValueChange = { model.setTtsPitch(it.toInt()) },
+            valueRange = 50f..200f,
+        )
         Spacer(Modifier.height(8.dp))
     }
 }
@@ -275,6 +299,9 @@ class NovelReaderScreenModel(
                 lineSpacing = NovelStore.lineSpacingPercent().get(),
                 fontFamily = NovelStore.fontFamily().get(),
                 keepScreenOn = NovelStore.keepScreenOn().get(),
+                ttsSpeed = NovelStore.ttsSpeed().get(),
+                ttsPitch = NovelStore.ttsPitch().get(),
+                ttsLang = NovelStore.ttsLang().get(),
             )
         }
         loadChapter(state.value.index)
@@ -315,6 +342,23 @@ class NovelReaderScreenModel(
         mutableState.update { it.copy(keepScreenOn = value) }
     }
 
+    fun setTtsSpeed(percent: Int) {
+        val p = percent.coerceIn(50, 200)
+        NovelStore.ttsSpeed().set(p)
+        mutableState.update { it.copy(ttsSpeed = p) }
+    }
+
+    fun setTtsPitch(percent: Int) {
+        val p = percent.coerceIn(50, 200)
+        NovelStore.ttsPitch().set(p)
+        mutableState.update { it.copy(ttsPitch = p) }
+    }
+
+    fun setTtsLang(tag: String) {
+        NovelStore.ttsLang().set(tag)
+        mutableState.update { it.copy(ttsLang = tag) }
+    }
+
     private fun loadChapter(index: Int) {
         val chapter = chapters.getOrNull(index) ?: return
         screenModelScope.launchIO {
@@ -345,6 +389,9 @@ class NovelReaderScreenModel(
         val lineSpacing: Int = 150,
         val fontFamily: Int = 0,
         val keepScreenOn: Boolean = true,
+        val ttsSpeed: Int = 100,
+        val ttsPitch: Int = 100,
+        val ttsLang: String = "",
         val isLoading: Boolean = true,
         val error: String? = null,
     )

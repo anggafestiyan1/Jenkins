@@ -38,6 +38,11 @@ object NovelStore {
 
     fun keepScreenOn() = preferenceStore.getBoolean("novel_keep_screen_on", true)
 
+    // TTS voice: speed/pitch as percent (50..200), language tag ("" = device default, "en", "id")
+    fun ttsSpeed() = preferenceStore.getInt("novel_tts_speed", 100)
+    fun ttsPitch() = preferenceStore.getInt("novel_tts_pitch", 100)
+    fun ttsLang() = preferenceStore.getString("novel_tts_lang", "")
+
     // ---- Read chapters ----
 
     private fun readPref(novelUrl: String) = preferenceStore.getStringSet("novel_read_${novelUrl.hashCode()}")

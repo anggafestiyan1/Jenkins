@@ -27,6 +27,18 @@ class NovelTts(context: Context, private val onDone: () -> Unit) {
         })
     }
 
+    /** Adjust voice rate/pitch/language. Percent values are relative (100 = normal). */
+    fun configure(speedPercent: Int, pitchPercent: Int, langTag: String) {
+        tts.setSpeechRate((speedPercent / 100f).coerceIn(0.1f, 3f))
+        tts.setPitch((pitchPercent / 100f).coerceIn(0.1f, 3f))
+        val locale = if (langTag.isBlank()) {
+            java.util.Locale.getDefault()
+        } else {
+            java.util.Locale.forLanguageTag(langTag)
+        }
+        runCatching { tts.language = locale }
+    }
+
     fun speak(text: String) {
         if (!ready || text.isBlank()) return
         tts.stop()
