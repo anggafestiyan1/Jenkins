@@ -6,6 +6,7 @@ import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import com.hippo.unifile.UniFile
+import mihon.core.archive.archiveReader
 import eu.kanade.domain.entries.anime.interactor.UpdateAnime
 import eu.kanade.domain.entries.anime.model.toDomainAnime
 import eu.kanade.domain.entries.anime.model.toSAnime
@@ -95,16 +96,12 @@ class AnimeUploadScreenModel(
                 uris.forEachIndexed { index, uri ->
                     val src = UniFile.fromUri(context, uri)
                     if (src != null) {
-                        val fileName = src.name ?: "video_${index + 1}.mp4"
-                        if (animeDir.findFile(fileName) == null) {
-                            val target = animeDir.createFile(fileName)
-                            if (target != null) {
-                                src.openInputStream().use { input ->
-                                    target.openOutputStream().use { output ->
-                                        input.copyTo(output)
-                                    }
-                                }
-                            }
+                        val srcName = src.name ?: "file_${index + 1}"
+                        if (isArchive(srcName)) {
+                            // RAR/ZIP/7z etc: extract its video entries into the same folder.
+                            extractArchiveVideos(context, src, animeDir)
+                        } else {
+                            copyInto(src, srcName.ifBlank { "video_${index + 1}.mp4" }, animeDir)
                         }
                     }
                     mutableState.update { it.copy(progress = (index + 1f) / uris.size) }
@@ -143,6 +140,37 @@ class AnimeUploadScreenModel(
         }
     }
 
+    private fun ext(name: String) = name.substringAfterLast('.', "").lowercase()
+    private fun isArchive(name: String) = ext(name) in ARCHIVE_EXTENSIONS
+    private fun isVideo(name: String) = ext(name) in VIDEO_EXTENSIONS
+
+    private fun copyInto(src: UniFile, fileName: String, dir: UniFile) {
+        if (dir.findFile(fileName) != null) return
+        val target = dir.createFile(fileName) ?: return
+        src.openInputStream().use { input ->
+            target.openOutputStream().use { output -> input.copyTo(output) }
+        }
+    }
+
+    private fun extractArchiveVideos(context: Context, src: UniFile, dir: UniFile) {
+        val reader = src.archiveReader(context)
+        try {
+            val videoEntries = reader.useEntries { seq ->
+                seq.filter { it.isFile && isVideo(it.name) }.map { it.name }.toList()
+            }
+            videoEntries.forEach { entryName ->
+                val outName = entryName.substringAfterLast('/').substringAfterLast('\\')
+                if (outName.isNotBlank() && dir.findFile(outName) == null) {
+                    reader.getInputStream(entryName)?.use { input ->
+                        dir.createFile(outName)?.openOutputStream()?.use { output -> input.copyTo(output) }
+                    }
+                }
+            }
+        } finally {
+            reader.close()
+        }
+    }
+
     @Immutable
     data class State(
         val categories: List<Category> = emptyList(),
@@ -159,5 +187,11 @@ class AnimeUploadScreenModel(
         data object NoFiles : Message
         data class Success(val folder: String) : Message
         data class Error(val reason: String) : Message
+    }
+
+    companion object {
+        private val VIDEO_EXTENSIONS =
+            setOf("mp4", "mkv", "webm", "avi", "mov", "flv", "wmv", "m4v", "ts", "mpg", "mpeg", "3gp")
+        private val ARCHIVE_EXTENSIONS = setOf("rar", "zip", "cbz", "cbr", "7z", "tar")
     }
 }

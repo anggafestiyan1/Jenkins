@@ -91,19 +91,20 @@ private fun Screen.AnimeUploadContent(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(
-            text = "Upload film/anime dari penyimpanan. File akan disimpan ke dalam satu folder " +
-                "dan otomatis muncul di tab Saved (autoplay lanjut ke file berikutnya dalam folder).",
+            text = "Upload film/anime dari penyimpanan. Bisa pilih banyak file sekaligus, atau " +
+                "arsip RAR/ZIP (otomatis diekstrak). Semua disimpan ke dalam satu folder dan " +
+                "muncul di tab Saved (autoplay lanjut ke file berikutnya dalam folder).",
         )
 
         OutlinedButton(
-            onClick = { pickFiles.launch(arrayOf("video/*")) },
+            onClick = { pickFiles.launch(arrayOf("*/*")) },
             enabled = !state.isUploading,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Icon(imageVector = Icons.Outlined.VideoLibrary, contentDescription = null)
             Text(
                 text = if (state.pickedUris.isEmpty()) {
-                    "Pilih video"
+                    "Pilih video / arsip (RAR/ZIP)"
                 } else {
                     "${state.pickedUris.size} file dipilih"
                 },
