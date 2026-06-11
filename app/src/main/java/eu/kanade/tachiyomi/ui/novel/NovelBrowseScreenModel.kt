@@ -17,6 +17,12 @@ class NovelBrowseScreenModel : StateScreenModel<NovelBrowseScreenModel.State>(St
 
     fun onQueryChange(query: String) = mutableState.update { it.copy(query = query) }
 
+    fun setLang(lang: NovelLang) {
+        if (state.value.lang == lang) return
+        mutableState.update { it.copy(lang = lang) }
+        load(reset = true)
+    }
+
     fun toggleSearch() {
         val active = !state.value.searchActive
         mutableState.update { it.copy(searchActive = active) }
@@ -60,9 +66,9 @@ class NovelBrowseScreenModel : StateScreenModel<NovelBrowseScreenModel.State>(St
             }
             try {
                 val result = if (query.isBlank()) {
-                    NovelSource.popular(page)
+                    NovelSource.popular(current.lang, page)
                 } else {
-                    NovelSource.search(query, page)
+                    NovelSource.search(current.lang, query, page)
                 }
                 mutableState.update {
                     val merged = (if (reset) result else it.items + result).distinctBy { n -> n.url }
@@ -84,6 +90,7 @@ class NovelBrowseScreenModel : StateScreenModel<NovelBrowseScreenModel.State>(St
 
     @Immutable
     data class State(
+        val lang: NovelLang = NovelLang.EN,
         val savedMode: Boolean = false,
         val searchActive: Boolean = false,
         val query: String = "",

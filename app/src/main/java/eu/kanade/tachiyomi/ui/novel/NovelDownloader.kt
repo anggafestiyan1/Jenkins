@@ -73,6 +73,25 @@ object NovelDownloader {
         onProgress: (Int, Int) -> Unit,
     ) = downloadChapters(context, detail, detail.chapters.indices.toList(), onProgress)
 
+    /** Downloads a single chapter (by index into [NovelDetail.chapters]). Skips if already present. */
+    suspend fun downloadOne(context: Context, detail: NovelDetail, index: Int): Boolean {
+        val dir = novelDir(context, detail.url).apply { mkdirs() }
+        val meta = metaFile(context, detail.url)
+        if (!meta.exists()) {
+            meta.writeText(listOf(detail.url, detail.title, detail.coverUrl).joinToString(SEP))
+        }
+        val chapter = detail.chapters.getOrNull(index) ?: return false
+        val file = File(dir, "$index.txt")
+        if (file.exists()) return true
+        val text = runCatching { NovelSource.chapterText(chapter.url) }.getOrDefault("")
+        return if (text.isNotBlank()) {
+            file.writeText(text)
+            true
+        } else {
+            false
+        }
+    }
+
     fun getDownloaded(context: Context): List<NovelItem> {
         val root = rootDir(context)
         return root.listFiles()?.mapNotNull { dir ->

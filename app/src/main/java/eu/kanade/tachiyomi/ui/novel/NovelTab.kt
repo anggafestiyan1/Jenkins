@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.ui.novel
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -24,8 +25,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -141,6 +146,21 @@ private fun NovelBrowseContent(screenModel: NovelBrowseScreenModel) {
             keyboardActions = KeyboardActions(onSearch = { screenModel.submitSearch() }),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         )
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FilterChip(
+                selected = state.lang == NovelLang.EN,
+                onClick = { screenModel.setLang(NovelLang.EN) },
+                label = { Text("English") },
+            )
+            FilterChip(
+                selected = state.lang == NovelLang.ID,
+                onClick = { screenModel.setLang(NovelLang.ID) },
+                label = { Text("Indonesia") },
+            )
+        }
         Box(Modifier.fillMaxSize()) {
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(110.dp),
@@ -269,27 +289,54 @@ private fun NovelDownloadContent(active: Boolean) {
 @Composable
 private fun NovelQueueContent() {
     val queue by NovelDownloadQueue.state.collectAsState()
-    if (queue.isEmpty()) {
-        CenterMessage(stringResource(AYMR.strings.label_novel_empty))
-    } else {
-        LazyColumn(Modifier.fillMaxSize()) {
-            columnItems(queue, key = { it.id }) { item ->
-                Column(Modifier.fillMaxWidth().padding(12.dp)) {
-                    Text(
-                        item.title,
-                        style = MaterialTheme.typography.bodyLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+    val paused by NovelDownloadQueue.paused.collectAsState()
+    Column(Modifier.fillMaxSize()) {
+        if (queue.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                OutlinedButton(
+                    onClick = { if (paused) NovelDownloadQueue.resume() else NovelDownloadQueue.pause() },
+                ) {
+                    Icon(
+                        imageVector = if (paused) Icons.Outlined.PlayArrow else Icons.Outlined.Pause,
+                        contentDescription = null,
                     )
-                    Spacer(Modifier.height(4.dp))
-                    LinearProgressIndicator(
-                        progress = { if (item.total > 0) item.done.toFloat() / item.total else 0f },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Text(
-                        text = "${item.done}/${item.total}",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    Text(if (paused) "Resume" else "Pause")
+                }
+            }
+        }
+        if (queue.isEmpty()) {
+            CenterMessage(stringResource(AYMR.strings.label_novel_empty))
+        } else {
+            LazyColumn(Modifier.fillMaxSize()) {
+                columnItems(queue, key = { it.id }) { item ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                item.title,
+                                style = MaterialTheme.typography.bodyLarge,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            LinearProgressIndicator(
+                                progress = { if (item.total > 0) item.done.toFloat() / item.total else 0f },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Text(
+                                text = "${item.done}/${item.total}",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        IconButton(onClick = { NovelDownloadQueue.remove(item.id) }) {
+                            Icon(Icons.Outlined.Delete, contentDescription = "Delete")
+                        }
+                    }
                 }
             }
         }
