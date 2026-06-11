@@ -7,6 +7,7 @@ import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.GetApp
+import androidx.compose.material.icons.outlined.SaveAlt
 import androidx.compose.material.icons.outlined.SettingsBackupRestore
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.QueryStats
@@ -43,6 +44,7 @@ fun MoreScreen(
     onClickStats: () -> Unit,
     onClickStorage: () -> Unit,
     onClickBackup: () -> Unit,
+    onClickQuickBackup: () -> Unit,
     onClickRestore: () -> Unit,
     onClickSettings: () -> Unit,
     onClickAbout: () -> Unit,
@@ -141,6 +143,13 @@ fun MoreScreen(
                     title = stringResource(MR.strings.pref_create_backup),
                     icon = Icons.Outlined.Backup,
                     onPreferenceClick = onClickBackup,
+                )
+            }
+            item {
+                TextPreferenceWidget(
+                    title = "Backup ke Download (1-tap)",
+                    icon = Icons.Outlined.SaveAlt,
+                    onPreferenceClick = onClickQuickBackup,
                 )
             }
             item {

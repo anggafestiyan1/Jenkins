@@ -17,13 +17,20 @@ import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import eu.kanade.core.preference.asState
 import eu.kanade.domain.base.BasePreferences
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import eu.kanade.presentation.more.MoreScreen
 import eu.kanade.presentation.more.settings.screen.data.CreateBackupScreen
 import eu.kanade.presentation.more.settings.screen.data.RestoreBackupScreen
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
+import eu.kanade.tachiyomi.data.backup.QuickBackup
+import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadManager
 import eu.kanade.tachiyomi.data.download.manga.MangaDownloadManager
 import eu.kanade.tachiyomi.ui.category.CategoriesTab
@@ -70,6 +77,20 @@ data object MoreTab : Tab {
         ) { uri ->
             if (uri != null) navigator.push(RestoreBackupScreen(uri.toString()))
         }
+
+        val context = LocalContext.current
+        fun runQuickBackup() {
+            val name = QuickBackup.toDownloads(context)
+            context.toast(
+                if (name != null) "Backup dibuat di folder Download" else "Gagal membuat backup",
+            )
+        }
+        val writePermLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission(),
+        ) { granted ->
+            if (granted) runQuickBackup() else context.toast("Izin penyimpanan ditolak")
+        }
+
         MoreScreen(
             downloadQueueStateProvider = { downloadQueueState },
             downloadedOnly = screenModel.downloadedOnly,
@@ -81,6 +102,18 @@ data object MoreTab : Tab {
             onClickStats = { navigator.push(StatsTab) },
             onClickStorage = { navigator.push(StorageTab) },
             onClickBackup = { navigator.push(CreateBackupScreen()) },
+            onClickQuickBackup = {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q ||
+                    ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                    ) == PackageManager.PERMISSION_GRANTED
+                ) {
+                    runQuickBackup()
+                } else {
+                    writePermLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                }
+            },
             onClickRestore = { restorePicker.launch("*/*") },
             onClickSettings = { navigator.push(SettingsScreen()) },
             onClickAbout = { navigator.push(SettingsScreen(SettingsScreen.Destination.About)) },

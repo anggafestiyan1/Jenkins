@@ -34,6 +34,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
+import cafe.adriel.voyager.navigator.LocalNavigator
+import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.components.TabContent
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -61,6 +63,7 @@ private fun Screen.AnimeUploadContent(
     showMessage: suspend (String) -> Unit,
 ) {
     val context = LocalContext.current
+    val navigator = LocalNavigator.currentOrThrow
     val screenModel = rememberScreenModel { AnimeUploadScreenModel() }
     val state by screenModel.state.collectAsState()
 
@@ -171,6 +174,13 @@ private fun Screen.AnimeUploadContent(
                 progress = { state.progress },
                 modifier = Modifier.fillMaxWidth(),
             )
+        }
+
+        OutlinedButton(
+            onClick = { navigator.push(FilmFolderManagerScreen()) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Kelola folder (ubah nama / hapus)")
         }
     }
 }

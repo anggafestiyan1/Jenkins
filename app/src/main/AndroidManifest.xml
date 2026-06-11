@@ -11,6 +11,9 @@
     <uses-permission
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
+    <!-- WRITE_EXTERNAL_STORAGE (<=API 32) is already provided by aniyomi-mpv-lib;
+         used for one-tap backup to Downloads on Android 9. -->
+
 
     <!-- For background jobs -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
