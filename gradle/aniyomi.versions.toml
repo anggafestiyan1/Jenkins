@@ -1,6 +1,7 @@
 [versions]
 aniyomi-mpv-lib = "1.18.n"
 arthenica-smartexceptions = "0.2.1"
+newpipe-extractor = "v0.26.3"
 constraint-layout = "1.1.0"
 ffmpeg-kit = "1.18"
 media = "1.7.0"
@@ -13,5 +14,6 @@ arthenica-smartexceptions = { module = "com.arthenica:smart-exception-java", ver
 compose-constraintlayout = { module = "androidx.constraintlayout:constraintlayout-compose", version.ref = "constraint-layout" }
 ffmpeg-kit = { module = "com.github.jmir1:ffmpeg-kit", version.ref = "ffmpeg-kit" }
 mediasession = { module = "androidx.media:media", version.ref = "media" }
+newpipe-extractor = { module = "com.github.TeamNewPipe:NewPipeExtractor", version.ref = "newpipe-extractor" }
 seeker = { module = "io.github.2307vivek:seeker", version.ref = "seeker" }
 truetypeparser = { module = "io.github.yubyf:truetypeparser-light", version.ref = "truetypeparser" }

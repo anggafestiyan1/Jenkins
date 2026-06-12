@@ -309,6 +309,8 @@ dependencies {
     implementation(aniyomilibs.seeker)
     // true type parser
     implementation(aniyomilibs.truetypeparser)
+    // YouTube search/extraction (NewPipeExtractor)
+    implementation(aniyomilibs.newpipe.extractor)
 }
 
 androidComponents {
