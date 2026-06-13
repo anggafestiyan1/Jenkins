@@ -5,6 +5,8 @@ import android.content.Context
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.FormBody
+import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.select.Elements
 import tachiyomi.core.common.util.lang.withIOContext
@@ -174,11 +176,58 @@ abstract class BaseStreamSource : StreamSource {
         if (decoded.startsWith("http")) decoded.trim() else null
     }.getOrNull()
 
-    /** Collects every plausible embed/player URL from a watch page (lazy attrs, base64, raw HTML). */
+    /**
+     * DooPlay theme (LK21/Rebahin): the player "server" tabs load their iframe via an AJAX call to
+     * wp-admin/admin-ajax.php — the iframe is NOT in the static HTML. Resolve each option here.
+     */
+    private suspend fun dooplayEmbeds(d: Document, pageUrl: String): List<String> {
+        val options = d.select("li.dooplay_player_option, .dooplay_player_option, #playeroptionsul li[data-post]")
+        if (options.isEmpty()) return emptyList()
+        val out = LinkedHashSet<String>()
+        for (li in options) {
+            val post = li.attr("data-post")
+            if (post.isBlank()) continue
+            val nume = li.attr("data-nume").ifBlank { "1" }
+            val type = li.attr("data-type").ifBlank { "movie" }
+            runCatching {
+                val body = FormBody.Builder()
+                    .add("action", "doo_player_ajax")
+                    .add("post", post)
+                    .add("nume", nume)
+                    .add("type", type)
+                    .build()
+                val req = Request.Builder()
+                    .url("$baseUrl/wp-admin/admin-ajax.php")
+                    .post(body)
+                    .header("Referer", pageUrl)
+                    .header("X-Requested-With", "XMLHttpRequest")
+                    .build()
+                val json = StreamHttp.client.newCall(req).awaitSuccess().body.string()
+                extractEmbedUrl(json)?.let { out.add(it) }
+            }
+        }
+        return out.toList()
+    }
+
+    private fun extractEmbedUrl(json: String): String? {
+        val raw = Regex(""""embed_url"\s*:\s*"((?:[^"\\]|\\.)*)"""").find(json)?.groupValues?.get(1)
+            ?: return null
+        val unescaped = raw.replace("\\/", "/").replace("\\\"", "\"").replace("\\u0026", "&")
+        return if (unescaped.contains("<iframe", ignoreCase = true)) {
+            Regex("""src=["']([^"']+)["']""").find(unescaped)?.groupValues?.get(1)
+        } else {
+            unescaped.takeIf { it.startsWith("http") }
+        }
+    }
+
+    /** Collects every plausible embed/player URL from a watch page (DooPlay AJAX, lazy attrs, base64). */
     protected open suspend fun embedCandidates(episode: StreamEpisode): List<String> {
         val d = doc(episode.url)
         val html = d.html()
         val urls = LinkedHashSet<String>()
+
+        // DooPlay AJAX servers — the real, reliable embeds. Kept first (highest priority).
+        val dooplay = dooplayEmbeds(d, episode.url)
 
         val attrs = listOf(
             "src", "data-src", "data-frame", "data-video", "data-player", "data-embed",
@@ -212,8 +261,8 @@ abstract class BaseStreamSource : StreamSource {
             decodeBase64Url(m.value)?.let { if (it.startsWith("http")) urls.add(it) }
         }
 
-        // Embed-looking URLs first; keep the rest as fallback.
-        return urls.sortedByDescending { looksLikeEmbed(it) }.distinct()
+        // DooPlay embeds first (most reliable), then embed-looking URLs, then the rest.
+        return (dooplay + urls.sortedByDescending { looksLikeEmbed(it) }).distinct()
     }
 
     override suspend fun playTargets(episode: StreamEpisode): List<String> {

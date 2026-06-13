@@ -27,6 +27,30 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.util.Screen
 import java.io.ByteArrayInputStream
 
+/** Removes large fixed/absolute ad overlays and auto-clicks close buttons; keeps the player. */
+private val CLEANUP_JS = """
+(function(){
+  function clean(){
+    try {
+      document.querySelectorAll('div,ins,aside,a').forEach(function(e){
+        var s = getComputedStyle(e);
+        if((s.position==='fixed'||s.position==='absolute') && (parseInt(s.zIndex||0) >= 9999)){
+          var r = e.getBoundingClientRect();
+          if(r.width > window.innerWidth*0.5 && r.height > window.innerHeight*0.4 && !e.querySelector('video,iframe')){
+            e.style.display='none';
+          }
+        }
+      });
+      document.querySelectorAll('[class*=close],[id*=close],[class*=btn-close],[class*=skip]').forEach(function(b){
+        try{ b.click(); }catch(e){}
+      });
+    } catch(e){}
+  }
+  clean();
+  var n=0; var t=setInterval(function(){ clean(); if(++n>=6){ clearInterval(t); } }, 1000);
+})();
+""".trimIndent()
+
 /**
  * Streaming player: loads the host's own web player (embed/watch page) in a WebView — far more
  * reliable than scraping the direct media URL out of obfuscated hosts. Blocks ad-network requests
@@ -100,6 +124,12 @@ class StreamWebPlayerScreen(
                                 // Block only main-frame navigations to ad hosts; allow legit player
                                 // redirects (e.g. interstitial → real player) to proceed.
                                 return request.isForMainFrame && AdBlock.isAd(request.url.toString())
+                            }
+
+                            override fun onPageFinished(view: WebView, url: String?) {
+                                // Auto-close full-screen ad overlays + click obvious close buttons,
+                                // a few times since ads load late. Preserves the actual player.
+                                view.evaluateJavascript(CLEANUP_JS, null)
                             }
                         }
                         if (ref.isNotBlank()) {

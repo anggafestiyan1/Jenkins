@@ -13,14 +13,22 @@ import tachiyomi.core.common.util.lang.withIOContext
  */
 object EmbedResolver {
 
-    suspend fun resolve(url: String): List<StreamVideo> = withIOContext {
+    suspend fun resolve(url: String): List<StreamVideo> = withIOContext { resolve(url, 0) }
+
+    private suspend fun resolve(url: String, depth: Int): List<StreamVideo> {
         val host = url.toHttpUrlOrNull()?.host.orEmpty()
-        when {
+        return when {
             host.isBlank() -> emptyList()
             host.contains("dood") || host.contains("d000d") || host.contains("dooood") -> doodstream(url)
-            else -> generic(url)
+            else -> generic(url, depth)
         }
     }
+
+    /** URL fragments that indicate a nested video-host iframe worth following. */
+    private val hostHints = listOf(
+        "dood", "mixdrop", "filemoon", "streamtape", "vidhide", "streamwish", "vidguard",
+        "mp4upload", "filelions", "streamhub", "/embed", "/e/", "player",
+    )
 
     private fun headersFor(url: String): Headers {
         val origin = url.toHttpUrlOrNull()?.let { "${it.scheme}://${it.host}" } ?: url
@@ -29,7 +37,7 @@ object EmbedResolver {
 
     private fun hostLabel(url: String): String = url.toHttpUrlOrNull()?.host.orEmpty().removePrefix("www.")
 
-    private suspend fun generic(url: String): List<StreamVideo> {
+    private suspend fun generic(url: String, depth: Int): List<StreamVideo> {
         val html = StreamHttp.client.newCall(GET(url, headersFor(url))).awaitSuccess().body.string()
         val found = LinkedHashSet<String>()
 
@@ -42,8 +50,24 @@ object EmbedResolver {
             found.add(it.value.replace("\\/", "/"))
         }
 
-        val label = hostLabel(url)
-        return found.map { StreamVideo(label = label, url = it, isHls = it.contains(".m3u8")) }
+        if (found.isNotEmpty()) {
+            val label = hostLabel(url)
+            return found.map { StreamVideo(label = label, url = it, isHls = it.contains(".m3u8")) }
+        }
+
+        // No media on this page — follow one level of nested video-host iframes/URLs.
+        if (depth < 2) {
+            val nested = LinkedHashSet<String>()
+            Regex("""<iframe[^>]+src=["']([^"']+)["']""", RegexOption.IGNORE_CASE).findAll(html).forEach {
+                var u = it.groupValues[1]
+                if (u.startsWith("//")) u = "https:$u"
+                if (u.startsWith("http") && hostHints.any { h -> u.contains(h, true) }) nested.add(u)
+            }
+            val out = ArrayList<StreamVideo>()
+            for (n in nested) runCatching { out += resolve(n, depth + 1) }
+            return out
+        }
+        return emptyList()
     }
 
     private suspend fun doodstream(url: String): List<StreamVideo> {
