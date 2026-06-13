@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.DeleteSweep
+import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.GetApp
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.SaveAlt
@@ -23,6 +24,7 @@ import eu.kanade.presentation.more.settings.widget.TextPreferenceWidget
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.cache.ChapterCache
 import eu.kanade.tachiyomi.ui.more.DownloadQueueState
+import eu.kanade.tachiyomi.ui.more.RecommendedExtensions
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.util.lang.withIOContext
@@ -128,6 +130,27 @@ fun MoreScreen(
                         scope.launch {
                             val deleted = withIOContext { chapterCache.clear() }
                             context.toast("Cache dihapus: $deleted file")
+                        }
+                    },
+                )
+            }
+
+            item {
+                TextPreferenceWidget(
+                    title = "Install extension komik (rekomendasi)",
+                    subtitle = "Asura, MangaDex, Flame, Hades, Lunar, Webtoon, dll — setujui tiap dialog install",
+                    icon = Icons.Outlined.Extension,
+                    onPreferenceClick = {
+                        scope.launch {
+                            context.toast("Mencari extension…")
+                            val count = RecommendedExtensions.installRecommended()
+                            context.toast(
+                                if (count > 0) {
+                                    "Memulai install $count extension — setujui dialognya"
+                                } else {
+                                    "Tidak ada extension ditemukan (cek internet/repo)"
+                                },
+                            )
                         }
                     },
                 )
