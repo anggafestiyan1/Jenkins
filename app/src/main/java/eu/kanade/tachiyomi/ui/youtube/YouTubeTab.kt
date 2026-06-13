@@ -323,7 +323,9 @@ class YouTubeSearchScreenModel : StateScreenModel<YouTubeSearchScreenModel.State
             try {
                 val results = YouTubeSource.search(q)
                 mutableState.update { it.copy(isLoading = false, results = results) }
-            } catch (e: Exception) {
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Throwable) {
                 logcat(LogPriority.ERROR, e)
                 mutableState.update { it.copy(isLoading = false, error = "Gagal mencari: ${e.message}") }
             }

@@ -327,6 +327,16 @@ androidComponents {
         // Layout Inspector's Compose tree
         it.packaging.resources.excludes.add("META-INF/*.version")
     }
+    // Backport URLEncoder/URLDecoder Charset overloads in NewPipeExtractor so YouTube works on Android 9.
+    onVariants(selector().all()) { variant ->
+        variant.instrumentation.transformClassesWith(
+            mihon.buildlogic.UrlEncoderAsmClassVisitorFactory::class.java,
+            com.android.build.api.instrumentation.InstrumentationScope.ALL,
+        ) {}
+        variant.instrumentation.setAsmFramesComputationMode(
+            com.android.build.api.instrumentation.FramesComputationMode.COPY_FRAMES,
+        )
+    }
 }
 
 buildscript {

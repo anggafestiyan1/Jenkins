@@ -107,7 +107,9 @@ object YtDownloadQueue {
                     } else if (_paused.value) {
                         return@launch // aborted by pause; resume() restarts
                     }
-                } catch (e: Exception) {
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
                     logcat(LogPriority.ERROR, e)
                     _state.update { list ->
                         list.map {
