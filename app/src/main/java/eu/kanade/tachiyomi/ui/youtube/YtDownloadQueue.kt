@@ -129,11 +129,14 @@ object YtDownloadQueue {
     private suspend fun process(item: Item): Boolean {
         val stream = YouTubeSource.getStream(item.video.url)
             ?: throw IllegalStateException("Stream tidak tersedia")
-        val folder = sanitize(item.video.title)
+        // Use the YouTube video id as the folder name (clean/short/valid); the real title is shown
+        // via details.json. A messy title-based folder name failed to create files on some storage.
+        val folder = "yt_${extractVideoId(item.video.url) ?: sanitize(item.video.title)}"
         val baseDir = storageManager.getLocalAnimeSourceDirectory()
             ?: throw IllegalStateException("Lokasi storage belum diatur")
         val dir = baseDir.findFile(folder) ?: baseDir.createDirectory(folder)
             ?: throw IllegalStateException("Gagal membuat folder")
+        writeDetailsJson(dir, item.video.title)
         // Use the real extension (mp4/webm) — SAF rejects unknown extensions like ".tmp".
         val extension = stream.extension.ifBlank { "mp4" }
         val fileName = "video.$extension"
@@ -201,5 +204,24 @@ object YtDownloadQueue {
     }
 
     private fun sanitize(name: String): String =
-        name.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(80).ifBlank { "video" }
+        name.replace(Regex("[^A-Za-z0-9 _-]"), "_").trim().take(60).ifBlank { "video" }
+
+    private fun extractVideoId(url: String): String? {
+        Regex("[?&]v=([A-Za-z0-9_-]{6,})").find(url)?.let { return it.groupValues[1] }
+        Regex("youtu\\.be/([A-Za-z0-9_-]{6,})").find(url)?.let { return it.groupValues[1] }
+        Regex("/shorts/([A-Za-z0-9_-]{6,})").find(url)?.let { return it.groupValues[1] }
+        Regex("/embed/([A-Za-z0-9_-]{6,})").find(url)?.let { return it.groupValues[1] }
+        return null
+    }
+
+    /** Writes the real video title so the local source shows it (folder name is the video id). */
+    private fun writeDetailsJson(dir: UniFile, title: String) {
+        if (dir.findFile("details.json") != null) return
+        val escaped = title.replace("\\", "\\\\").replace("\"", "\\\"")
+            .replace("\n", " ").replace("\r", " ")
+        val json = "{\"title\": \"$escaped\"}"
+        runCatching {
+            dir.createFile("details.json")?.openOutputStream()?.use { it.write(json.toByteArray()) }
+        }
+    }
 }
