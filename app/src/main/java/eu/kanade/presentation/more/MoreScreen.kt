@@ -137,20 +137,28 @@ fun MoreScreen(
 
             item {
                 TextPreferenceWidget(
-                    title = "Install extension komik (rekomendasi)",
-                    subtitle = "Asura, MangaDex, Flame, Hades, Lunar, Webtoon, dll — setujui tiap dialog install",
+                    title = "Install extension komik — English",
+                    subtitle = "Asura, MangaDex, Flame, Hades, Lunar, Webtoon, dll",
                     icon = Icons.Outlined.Extension,
                     onPreferenceClick = {
                         scope.launch {
                             context.toast("Mencari extension…")
-                            val count = RecommendedExtensions.installRecommended()
-                            context.toast(
-                                if (count > 0) {
-                                    "Memulai install $count extension — setujui dialognya"
-                                } else {
-                                    "Tidak ada extension ditemukan (cek internet/repo)"
-                                },
-                            )
+                            val count = RecommendedExtensions.installEnglish()
+                            context.toast(installResultMessage(count))
+                        }
+                    },
+                )
+            }
+            item {
+                TextPreferenceWidget(
+                    title = "Install extension komik — Indonesia",
+                    subtitle = "Kiryuu, KomikIndo, Komiku, ManhwaDesu, Shinigami, dll",
+                    icon = Icons.Outlined.Extension,
+                    onPreferenceClick = {
+                        scope.launch {
+                            context.toast("Mencari extension…")
+                            val count = RecommendedExtensions.installIndonesian()
+                            context.toast(installResultMessage(count))
                         }
                     },
                 )
@@ -178,3 +186,10 @@ fun MoreScreen(
         }
     }
 }
+
+private fun installResultMessage(count: Int): String =
+    if (count > 0) {
+        "Memulai install $count extension — setujui tiap dialog"
+    } else {
+        "Tidak ada extension cocok (cek internet / repo extension)"
+    }

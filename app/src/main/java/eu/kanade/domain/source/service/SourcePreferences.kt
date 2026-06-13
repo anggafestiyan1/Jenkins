@@ -22,7 +22,8 @@ class SourcePreferences(
 
     fun enabledLanguages() = preferenceStore.getStringSet(
         "source_languages",
-        LocaleHelper.getDefaultEnabledLanguages(),
+        // Enable Indonesian by default so Indonesian sources show up in the source list.
+        LocaleHelper.getDefaultEnabledLanguages() + "id",
     )
 
     fun showNsfwSource() = preferenceStore.getBoolean("show_nsfw_source", true)
