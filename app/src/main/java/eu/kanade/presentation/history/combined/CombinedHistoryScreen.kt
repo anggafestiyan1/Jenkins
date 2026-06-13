@@ -47,10 +47,7 @@ fun CombinedHistoryScreen(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
     ) { contentPadding ->
         Column(modifier = Modifier.padding(contentPadding)) {
-            FilterChips(
-                filter = filter,
-                onFilterChange = onFilterChange,
-            )
+            // Anime/Manga filter chips removed: Film and Komik each have their own Recent tab.
             state.list.let { list ->
                 if (list == null) {
                     LoadingScreen(Modifier.fillMaxWidth())

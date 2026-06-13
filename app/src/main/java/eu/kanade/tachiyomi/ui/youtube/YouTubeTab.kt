@@ -60,10 +60,11 @@ import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import cafe.adriel.voyager.navigator.LocalNavigator
+import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import coil3.compose.AsyncImage
 import eu.kanade.presentation.util.Tab
-import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -193,10 +194,9 @@ private fun SearchContent(model: YouTubeSearchScreenModel) {
 
 @Composable
 private fun OfflineContent(active: Boolean) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var items by remember { mutableStateOf(YtStore.getOffline()) }
-    androidx.compose.runtime.LaunchedEffect(active) { if (active) items = YtStore.getOffline() }
+    val navigator = LocalNavigator.currentOrThrow
+    var items by remember { mutableStateOf(YtStore.listOffline()) }
+    androidx.compose.runtime.LaunchedEffect(active) { if (active) items = YtStore.listOffline() }
 
     if (items.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -204,15 +204,11 @@ private fun OfflineContent(active: Boolean) {
         }
     } else {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(8.dp)) {
-            items(items, key = { it.animeId }) { offline ->
+            items(items, key = { it.id }) { offline ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable {
-                            scope.launch {
-                                MainActivity.startPlayerActivity(context, offline.animeId, offline.episodeId, false)
-                            }
-                        }
+                        .clickable { navigator.push(YtPlayerScreen(offline.videoPath, offline.title)) }
                         .padding(vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -230,6 +226,12 @@ private fun OfflineContent(active: Boolean) {
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
+                    IconButton(onClick = {
+                        YtStore.delete(offline.id)
+                        items = YtStore.listOffline()
+                    }) {
+                        Icon(Icons.Outlined.Delete, contentDescription = "Delete")
+                    }
                 }
             }
         }

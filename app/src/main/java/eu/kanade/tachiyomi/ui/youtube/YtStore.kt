@@ -1,52 +1,56 @@
 package eu.kanade.tachiyomi.ui.youtube
 
-import tachiyomi.core.common.preference.PreferenceStore
-import tachiyomi.core.common.preference.getAndSet
+import android.app.Application
 import uy.kohesive.injekt.injectLazy
+import java.io.File
 
 /**
- * Tracks downloaded (offline) YouTube videos so the Offline tab can list and play them.
- * Each entry is encoded as animeId|episodeId|title|thumb (the video lives in the local film source).
+ * File-backed storage for downloaded (offline) YouTube videos, kept separate from the Film library.
+ * Each video lives in app-internal storage at filesDir/youtube/<id>/ (video.<ext> + meta.txt), so it
+ * is independent of the configurable Film/local-source storage and is removed on uninstall.
  */
 object YtStore {
 
-    private val preferenceStore: PreferenceStore by injectLazy()
-    private const val SEP = "|#|"
+    private val app: Application by injectLazy()
 
-    private fun offlinePref() = preferenceStore.getStringSet("yt_offline")
+    private fun root(): File = File(app.filesDir, "youtube").apply { mkdirs() }
 
-    fun getOffline(): List<YtOffline> = offlinePref().get()
-        .mapNotNull { decode(it) }
-        .sortedBy { it.title.lowercase() }
+    fun dirFor(id: String): File = File(root(), id)
 
-    fun addOffline(entry: YtOffline) {
-        offlinePref().getAndSet { current ->
-            val without = current.filterNot { decode(it)?.animeId == entry.animeId }.toSet()
-            without + encode(entry)
-        }
+    fun videoFile(id: String): File? =
+        dirFor(id).listFiles()?.firstOrNull { it.isFile && it.name.startsWith("video.") }
+
+    fun saveMeta(id: String, title: String, thumbnailUrl: String) {
+        val dir = dirFor(id).apply { mkdirs() }
+        val safeTitle = title.replace("\n", " ").replace("\r", " ")
+        File(dir, "meta.txt").writeText("$safeTitle\n$thumbnailUrl")
     }
 
-    fun removeOffline(animeId: Long) {
-        offlinePref().getAndSet { current ->
-            current.filterNot { decode(it)?.animeId == animeId }.toSet()
-        }
+    fun listOffline(): List<YtOffline> {
+        return root().listFiles()?.mapNotNull { dir ->
+            if (!dir.isDirectory) return@mapNotNull null
+            val meta = File(dir, "meta.txt")
+            if (!meta.exists()) return@mapNotNull null
+            val video = dir.listFiles()?.firstOrNull { it.isFile && it.name.startsWith("video.") }
+                ?: return@mapNotNull null
+            val lines = meta.readLines()
+            YtOffline(
+                id = dir.name,
+                title = lines.getOrElse(0) { dir.name },
+                thumbnailUrl = lines.getOrElse(1) { "" },
+                videoPath = video.absolutePath,
+            )
+        }?.sortedBy { it.title.lowercase() }.orEmpty()
     }
 
-    private fun encode(e: YtOffline): String =
-        listOf(e.animeId.toString(), e.episodeId.toString(), e.title, e.thumbnailUrl).joinToString(SEP)
-
-    private fun decode(raw: String): YtOffline? {
-        val parts = raw.split(SEP)
-        if (parts.size < 4) return null
-        val animeId = parts[0].toLongOrNull() ?: return null
-        val episodeId = parts[1].toLongOrNull() ?: return null
-        return YtOffline(animeId, episodeId, parts[2], parts[3])
+    fun delete(id: String) {
+        dirFor(id).deleteRecursively()
     }
 }
 
 data class YtOffline(
-    val animeId: Long,
-    val episodeId: Long,
+    val id: String,
     val title: String,
     val thumbnailUrl: String,
+    val videoPath: String,
 )

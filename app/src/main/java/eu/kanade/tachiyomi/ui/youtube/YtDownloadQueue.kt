@@ -1,12 +1,5 @@
 package eu.kanade.tachiyomi.ui.youtube
 
-import android.app.Application
-import com.hippo.unifile.UniFile
-import eu.kanade.domain.entries.anime.interactor.UpdateAnime
-import eu.kanade.domain.entries.anime.model.toDomainAnime
-import eu.kanade.domain.entries.anime.model.toSAnime
-import eu.kanade.domain.items.episode.interactor.SyncEpisodesWithSource
-import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.NetworkHelper
 import kotlinx.coroutines.CoroutineScope
@@ -21,28 +14,18 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.entries.anime.interactor.NetworkToLocalAnime
-import tachiyomi.domain.items.episode.interactor.GetEpisodesByAnimeId
-import tachiyomi.domain.source.anime.service.AnimeSourceManager
-import tachiyomi.domain.storage.service.StorageManager
-import tachiyomi.source.local.entries.anime.LocalAnimeSource
 import uy.kohesive.injekt.injectLazy
+import java.io.File
+import java.io.FileOutputStream
 
 /**
- * Downloads YouTube videos (resolved via [YouTubeSource]) into the local film source folder, then
- * indexes them as Film entries so they play offline. Sequential, with pause/resume and per-item
- * delete (delete only removes the queue job).
+ * Downloads YouTube videos into app-internal storage (filesDir/youtube/<id>/video.<ext>) for offline
+ * playback — kept entirely separate from the Film library. Sequential, with pause/resume and
+ * per-item delete (delete removes only the queue job; finished videos appear in the Offline tab).
  */
 object YtDownloadQueue {
 
-    private val app: Application by injectLazy()
     private val network: NetworkHelper by injectLazy()
-    private val storageManager: StorageManager by injectLazy()
-    private val sourceManager: AnimeSourceManager by injectLazy()
-    private val networkToLocalAnime: NetworkToLocalAnime by injectLazy()
-    private val updateAnime: UpdateAnime by injectLazy()
-    private val syncEpisodesWithSource: SyncEpisodesWithSource by injectLazy()
-    private val getEpisodesByAnimeId: GetEpisodesByAnimeId by injectLazy()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _state = MutableStateFlow<List<Item>>(emptyList())
@@ -65,11 +48,6 @@ object YtDownloadQueue {
         val thumbnailUrl: String get() = video.thumbnailUrl
     }
 
-    fun retry(id: Long) {
-        _state.update { list -> list.map { if (it.id == id) it.copy(status = Status.QUEUED, error = null, progress = 0f) else it } }
-        ensureLoop()
-    }
-
     @Synchronized
     fun enqueue(video: YtItem) {
         if (_state.value.any { it.video.url == video.url }) return
@@ -90,6 +68,11 @@ object YtDownloadQueue {
         _state.update { list -> list.filterNot { it.id == id } }
     }
 
+    fun retry(id: Long) {
+        _state.update { list -> list.map { if (it.id == id) it.copy(status = Status.QUEUED, error = null, progress = 0f) else it } }
+        ensureLoop()
+    }
+
     @Synchronized
     private fun ensureLoop() {
         if (_paused.value) return
@@ -97,7 +80,6 @@ object YtDownloadQueue {
         loopJob = scope.launch {
             while (isActive) {
                 if (_paused.value) return@launch
-                // Skip items that already errored (kept visible for the user).
                 val item = _state.value.firstOrNull { it.status != Status.ERROR } ?: return@launch
                 setStatus(item.id, Status.DOWNLOADING)
                 try {
@@ -105,7 +87,7 @@ object YtDownloadQueue {
                     if (completed) {
                         _state.update { list -> list.filterNot { it.id == item.id } }
                     } else if (_paused.value) {
-                        return@launch // aborted by pause; resume() restarts
+                        return@launch
                     }
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
@@ -113,11 +95,7 @@ object YtDownloadQueue {
                     logcat(LogPriority.ERROR, e)
                     _state.update { list ->
                         list.map {
-                            if (it.id == item.id) {
-                                it.copy(status = Status.ERROR, error = e.message ?: e.javaClass.simpleName)
-                            } else {
-                                it
-                            }
+                            if (it.id == item.id) it.copy(status = Status.ERROR, error = e.message ?: e.javaClass.simpleName) else it
                         }
                     }
                 }
@@ -125,53 +103,28 @@ object YtDownloadQueue {
         }
     }
 
-    /** True = downloaded + indexed; false = aborted (paused/removed). Throws on real failure. */
+    /** True = downloaded; false = aborted (paused/removed). Throws on real failure. */
     private suspend fun process(item: Item): Boolean {
         val stream = YouTubeSource.getStream(item.video.url)
             ?: throw IllegalStateException("Stream tidak tersedia")
-        // Use the YouTube video id as the folder name (clean/short/valid); the real title is shown
-        // via details.json. A messy title-based folder name failed to create files on some storage.
-        val folder = "yt_${extractVideoId(item.video.url) ?: sanitize(item.video.title)}"
-        val baseDir = storageManager.getLocalAnimeSourceDirectory()
-            ?: throw IllegalStateException("Lokasi storage belum diatur")
-        val dir = baseDir.findFile(folder) ?: baseDir.createDirectory(folder)
-            ?: throw IllegalStateException("Gagal membuat folder")
-        writeDetailsJson(dir, item.video.title)
-        // Use the real extension (mp4/webm) — SAF rejects unknown extensions like ".tmp".
-        val extension = stream.extension.ifBlank { "mp4" }
-        val fileName = "video.$extension"
+        val id = extractVideoId(item.video.url) ?: item.video.url.hashCode().toString()
+        val dir = YtStore.dirFor(id).apply { mkdirs() }
+        YtStore.saveMeta(id, item.video.title, item.video.thumbnailUrl)
 
-        // Always download fresh to avoid leftover partial files being treated as complete.
-        dir.findFile(fileName)?.delete()
-        val target = dir.createFile(fileName) ?: throw IllegalStateException(
-            "Gagal membuat file. base=${baseDir.uri} dirExists=${dir.exists()} isDir=${dir.isDirectory} canWrite=${dir.canWrite()}",
-        )
-        val ok = download(stream.streamUrl, target, item.id)
+        val extension = stream.extension.ifBlank { "mp4" }
+        val file = File(dir, "video.$extension")
+        if (file.exists()) file.delete()
+
+        val ok = download(stream.streamUrl, file, item.id)
         if (!ok) {
-            target.delete()
-            // Distinguish abort (pause/remove) from a real download failure.
+            file.delete()
             if (_paused.value || _state.value.none { it.id == item.id }) return false
             throw IllegalStateException("Download gagal")
         }
-
-        // Index into the local film library so it plays offline.
-        val source = sourceManager.get(LocalAnimeSource.ID)
-            ?: throw IllegalStateException("Local source tidak tersedia")
-        val sAnime = SAnime.create().apply {
-            this.url = folder
-            this.title = item.video.title
-        }
-        val anime = networkToLocalAnime.await(sAnime.toDomainAnime(LocalAnimeSource.ID))
-        updateAnime.awaitUpdateFavorite(anime.id, true)
-        val sourceEpisodes = source.getEpisodeList(anime.toSAnime())
-        syncEpisodesWithSource.await(sourceEpisodes, anime, source, false)
-        val episodeId = getEpisodesByAnimeId.await(anime.id).firstOrNull()?.id
-            ?: throw IllegalStateException("Episode tidak terindeks")
-        YtStore.addOffline(YtOffline(anime.id, episodeId, item.video.title, item.video.thumbnailUrl))
         return true
     }
 
-    private fun download(url: String, target: UniFile, id: Long): Boolean {
+    private fun download(url: String, file: File, id: Long): Boolean {
         val response = network.client.newCall(GET(url)).execute()
         if (!response.isSuccessful) {
             response.close()
@@ -181,10 +134,9 @@ object YtDownloadQueue {
         val total = body.contentLength()
         var downloaded = 0L
         body.byteStream().use { input ->
-            target.openOutputStream().use { output ->
+            FileOutputStream(file).use { output ->
                 val buffer = ByteArray(8 * 1024)
                 while (true) {
-                    // Abort if paused or this job was removed from the queue.
                     if (_paused.value || _state.value.none { it.id == id }) return false
                     val read = input.read(buffer)
                     if (read < 0) break
@@ -205,25 +157,11 @@ object YtDownloadQueue {
         _state.update { list -> list.map { if (it.id == id) it.copy(progress = progress) else it } }
     }
 
-    private fun sanitize(name: String): String =
-        name.replace(Regex("[^A-Za-z0-9 _-]"), "_").trim().take(60).ifBlank { "video" }
-
     private fun extractVideoId(url: String): String? {
         Regex("[?&]v=([A-Za-z0-9_-]{6,})").find(url)?.let { return it.groupValues[1] }
         Regex("youtu\\.be/([A-Za-z0-9_-]{6,})").find(url)?.let { return it.groupValues[1] }
         Regex("/shorts/([A-Za-z0-9_-]{6,})").find(url)?.let { return it.groupValues[1] }
         Regex("/embed/([A-Za-z0-9_-]{6,})").find(url)?.let { return it.groupValues[1] }
         return null
-    }
-
-    /** Writes the real video title so the local source shows it (folder name is the video id). */
-    private fun writeDetailsJson(dir: UniFile, title: String) {
-        if (dir.findFile("details.json") != null) return
-        val escaped = title.replace("\\", "\\\\").replace("\"", "\\\"")
-            .replace("\n", " ").replace("\r", " ")
-        val json = "{\"title\": \"$escaped\"}"
-        runCatching {
-            dir.createFile("details.json")?.openOutputStream()?.use { it.write(json.toByteArray()) }
-        }
     }
 }

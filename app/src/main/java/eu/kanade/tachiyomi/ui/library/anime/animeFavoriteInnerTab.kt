@@ -115,7 +115,8 @@ private fun Screen.AnimeFavoriteInnerContent(
             LibraryToolbar(
                 hasActiveFilters = state.hasActiveFilters,
                 selectedCount = state.selection.size,
-                title = title,
+                // Title text removed (redundant with the Film tab header).
+                title = title.copy(text = ""),
                 onClickUnselectAll = screenModel::clearSelection,
                 onClickSelectAll = { screenModel.selectAll(screenModel.activeCategoryIndex) },
                 onClickInvertSelection = {
