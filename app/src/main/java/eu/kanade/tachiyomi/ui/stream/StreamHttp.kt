@@ -2,9 +2,11 @@ package eu.kanade.tachiyomi.ui.stream
 
 import eu.kanade.tachiyomi.network.NetworkHelper
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import uy.kohesive.injekt.injectLazy
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
+import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
@@ -34,6 +36,22 @@ object StreamHttp {
             .hostnameVerifier { _, _ -> true }
             .followRedirects(true)
             .followSslRedirects(true)
+            .build()
+    }
+
+    /**
+     * Client for large file downloads: forces HTTP/1.1 (some CDNs abort HTTP/2 multiplexed long
+     * transfers — "software caused connection abort") and uses generous timeouts. Paired with the
+     * Range-resume retry loop in StreamDownloadQueue.
+     */
+    val downloadClient: OkHttpClient by lazy {
+        client.newBuilder()
+            .protocols(listOf(Protocol.HTTP_1_1))
+            .retryOnConnectionFailure(true)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(90, TimeUnit.SECONDS)
+            .writeTimeout(90, TimeUnit.SECONDS)
+            .callTimeout(0, TimeUnit.SECONDS)
             .build()
     }
 }

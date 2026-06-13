@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.ui.stream
 
-import eu.kanade.tachiyomi.network.GET
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -12,10 +11,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import logcat.LogPriority
-import okhttp3.Headers
+import okhttp3.Request
 import tachiyomi.core.common.util.system.logcat
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 
 /**
  * Downloads streaming videos into app-internal storage (filesDir/stream/offline/<id>/) for offline
@@ -130,32 +130,71 @@ object StreamDownloadQueue {
         return true
     }
 
+    /**
+     * Resumable download: requests a byte Range from the current file size and retries on transient
+     * network aborts ("software caused connection abort" — common on these CDNs for big files).
+     * Returns true when complete, false when aborted by pause/remove; throws after exhausting retries.
+     */
     private fun download(video: StreamVideo, file: File, id: Long): Boolean {
-        val headers = Headers.Builder().apply {
-            video.headers.forEach { (k, v) -> add(k, v) }
-        }.build()
-        val response = StreamHttp.client.newCall(GET(video.url, headers)).execute()
-        if (!response.isSuccessful) {
-            response.close()
-            return false
-        }
-        val body = response.body
-        val total = body.contentLength()
-        var downloaded = 0L
-        body.byteStream().use { input ->
-            FileOutputStream(file).use { output ->
-                val buffer = ByteArray(8 * 1024)
-                while (true) {
-                    if (_paused.value || _state.value.none { it.id == id }) return false
-                    val read = input.read(buffer)
-                    if (read < 0) break
-                    output.write(buffer, 0, read)
-                    downloaded += read
-                    if (total > 0) updateProgress(id, downloaded.toFloat() / total)
+        val maxAttempts = 6
+        var attempt = 0
+        var lastError: IOException? = null
+
+        while (attempt < maxAttempts) {
+            if (_paused.value || _state.value.none { it.id == id }) return false
+            val existing = if (file.exists()) file.length() else 0L
+
+            val request = Request.Builder().url(video.url).apply {
+                video.headers.forEach { (k, v) -> header(k, v) }
+                if (existing > 0) header("Range", "bytes=$existing-")
+            }.build()
+
+            val response = try {
+                StreamHttp.downloadClient.newCall(request).execute()
+            } catch (e: IOException) {
+                lastError = e
+                attempt++
+                continue
+            }
+
+            try {
+                if (response.code == 416) return true // requested range past EOF → already complete
+                if (!response.isSuccessful) return false
+
+                val resuming = existing > 0 && response.code == 206
+                if (!resuming && existing > 0) file.delete() // server ignored Range → restart clean
+
+                val total = response.header("Content-Range")?.substringAfter('/')?.toLongOrNull()
+                    ?: response.body.contentLength().takeIf { it > 0 }?.let { (if (resuming) existing else 0L) + it }
+                    ?: -1L
+
+                var downloaded = if (resuming) existing else 0L
+                response.body.byteStream().use { input ->
+                    FileOutputStream(file, resuming).use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        while (true) {
+                            if (_paused.value || _state.value.none { it.id == id }) return false
+                            val read = input.read(buffer)
+                            if (read < 0) break
+                            output.write(buffer, 0, read)
+                            downloaded += read
+                            if (total > 0) updateProgress(id, (downloaded.toFloat() / total).coerceIn(0f, 1f))
+                        }
+                    }
                 }
+
+                if (total <= 0 || file.length() >= total) return true
+                // Stream ended early without an exception → loop to resume the remainder.
+                attempt++
+            } catch (e: IOException) {
+                if (_paused.value || _state.value.none { it.id == id }) return false
+                lastError = e
+                attempt++
+            } finally {
+                response.close()
             }
         }
-        return true
+        throw lastError ?: IllegalStateException("Download terputus berulang kali")
     }
 
     private fun setStatus(id: Long, status: Status) {
