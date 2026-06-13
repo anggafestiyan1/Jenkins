@@ -33,6 +33,7 @@ import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import cafe.adriel.voyager.core.screen.Screen
 import coil3.compose.AsyncImage
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.presentation.components.TabContent
 import eu.kanade.tachiyomi.extension.manga.MangaExtensionManager
 import eu.kanade.tachiyomi.extension.manga.model.MangaExtension
@@ -41,6 +42,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
+import tachiyomi.core.common.preference.plusAssign
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.screens.LoadingScreen
@@ -114,6 +116,7 @@ fun Screen.mangaRecommendedTab(): TabContent {
 
 class MangaRecommendedScreenModel(
     private val extensionManager: MangaExtensionManager = Injekt.get(),
+    private val sourcePreferences: SourcePreferences = Injekt.get(),
 ) : StateScreenModel<MangaRecommendedScreenModel.State>(State()) {
 
     init {
@@ -123,6 +126,8 @@ class MangaRecommendedScreenModel(
                 extensionManager.availableExtensionsFlow,
                 extensionManager.installedExtensionsFlow,
             ) { available, installed ->
+                // Ensure languages of installed extensions are enabled so their sources show up.
+                installed.forEach { runCatching { sourcePreferences.enabledLanguages() += it.lang } }
                 val recommended = available
                     .filter { RecommendedExtensions.isRecommended(it.name) }
                     .distinctBy { it.pkgName }
@@ -135,6 +140,8 @@ class MangaRecommendedScreenModel(
     }
 
     fun install(extension: MangaExtension.Available) {
+        // Enable the extension's language so its source appears in the source list after install.
+        runCatching { sourcePreferences.enabledLanguages() += extension.lang }
         screenModelScope.launchIO {
             mutableState.update { it.copy(installing = it.installing + extension.pkgName) }
             runCatching { extensionManager.installExtension(extension).collect() }
