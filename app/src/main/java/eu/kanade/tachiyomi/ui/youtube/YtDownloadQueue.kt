@@ -52,16 +52,22 @@ object YtDownloadQueue {
     private var loopJob: Job? = null
     private var idCounter = 0L
 
-    enum class Status { QUEUED, DOWNLOADING }
+    enum class Status { QUEUED, DOWNLOADING, ERROR }
 
     data class Item(
         val id: Long,
         val video: YtItem,
         val progress: Float,
         val status: Status,
+        val error: String? = null,
     ) {
         val title: String get() = video.title
         val thumbnailUrl: String get() = video.thumbnailUrl
+    }
+
+    fun retry(id: Long) {
+        _state.update { list -> list.map { if (it.id == id) it.copy(status = Status.QUEUED, error = null, progress = 0f) else it } }
+        ensureLoop()
     }
 
     @Synchronized
@@ -91,41 +97,59 @@ object YtDownloadQueue {
         loopJob = scope.launch {
             while (isActive) {
                 if (_paused.value) return@launch
-                val item = _state.value.firstOrNull() ?: return@launch
+                // Skip items that already errored (kept visible for the user).
+                val item = _state.value.firstOrNull { it.status != Status.ERROR } ?: return@launch
                 setStatus(item.id, Status.DOWNLOADING)
-                val completed = try {
-                    process(item)
+                try {
+                    val completed = process(item)
+                    if (completed) {
+                        _state.update { list -> list.filterNot { it.id == item.id } }
+                    } else if (_paused.value) {
+                        return@launch // aborted by pause; resume() restarts
+                    }
                 } catch (e: Exception) {
                     logcat(LogPriority.ERROR, e)
-                    true // drop on error to avoid retry loops
-                }
-                if (completed) {
-                    _state.update { list -> list.filterNot { it.id == item.id } }
+                    _state.update { list ->
+                        list.map {
+                            if (it.id == item.id) {
+                                it.copy(status = Status.ERROR, error = e.message ?: e.javaClass.simpleName)
+                            } else {
+                                it
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
-    /** Returns true if the item is finished (downloaded + indexed) or failed; false if aborted (paused/removed). */
+    /** True = downloaded + indexed; false = aborted (paused/removed). Throws on real failure. */
     private suspend fun process(item: Item): Boolean {
-        val stream = YouTubeSource.getStream(item.video.url) ?: return true
+        val stream = YouTubeSource.getStream(item.video.url)
+            ?: throw IllegalStateException("Stream tidak tersedia")
         val folder = sanitize(item.video.title)
-        val baseDir = storageManager.getLocalAnimeSourceDirectory() ?: return true
-        val dir = baseDir.findFile(folder) ?: baseDir.createDirectory(folder) ?: return true
+        val baseDir = storageManager.getLocalAnimeSourceDirectory()
+            ?: throw IllegalStateException("Lokasi storage belum diatur")
+        val dir = baseDir.findFile(folder) ?: baseDir.createDirectory(folder)
+            ?: throw IllegalStateException("Gagal membuat folder")
         val fileName = "video.${stream.extension}"
 
         if (dir.findFile(fileName) == null) {
-            val tmp = dir.findFile("video.tmp") ?: dir.createFile("video.tmp") ?: return true
+            val tmp = dir.findFile("video.tmp") ?: dir.createFile("video.tmp")
+                ?: throw IllegalStateException("Gagal membuat file")
             val ok = download(stream.streamUrl, tmp, item.id)
             if (!ok) {
                 tmp.delete()
-                return false // aborted (paused or removed)
+                // Distinguish abort (pause/remove) from a real download failure.
+                if (_paused.value || _state.value.none { it.id == item.id }) return false
+                throw IllegalStateException("Download gagal")
             }
             tmp.renameTo(fileName)
         }
 
         // Index into the local film library so it plays offline.
-        val source = sourceManager.get(LocalAnimeSource.ID) ?: return true
+        val source = sourceManager.get(LocalAnimeSource.ID)
+            ?: throw IllegalStateException("Local source tidak tersedia")
         val sAnime = SAnime.create().apply {
             this.url = folder
             this.title = item.video.title
@@ -134,7 +158,8 @@ object YtDownloadQueue {
         updateAnime.awaitUpdateFavorite(anime.id, true)
         val sourceEpisodes = source.getEpisodeList(anime.toSAnime())
         syncEpisodesWithSource.await(sourceEpisodes, anime, source, false)
-        val episodeId = getEpisodesByAnimeId.await(anime.id).firstOrNull()?.id ?: return true
+        val episodeId = getEpisodesByAnimeId.await(anime.id).firstOrNull()?.id
+            ?: throw IllegalStateException("Episode tidak terindeks")
         YtStore.addOffline(YtOffline(anime.id, episodeId, item.video.title, item.video.thumbnailUrl))
         return true
     }

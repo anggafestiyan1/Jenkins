@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SmartDisplay
 import androidx.compose.material3.CircularProgressIndicator
@@ -274,10 +275,23 @@ private fun QueueContent() {
                                 overflow = TextOverflow.Ellipsis,
                             )
                             Spacer(Modifier.height(4.dp))
-                            LinearProgressIndicator(
-                                progress = { item.progress },
-                                modifier = Modifier.fillMaxWidth(),
-                            )
+                            if (item.status == YtDownloadQueue.Status.ERROR) {
+                                Text(
+                                    text = "Gagal: ${item.error}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            } else {
+                                LinearProgressIndicator(
+                                    progress = { item.progress },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        }
+                        if (item.status == YtDownloadQueue.Status.ERROR) {
+                            IconButton(onClick = { YtDownloadQueue.retry(item.id) }) {
+                                Icon(Icons.Outlined.Refresh, contentDescription = "Retry")
+                            }
                         }
                         IconButton(onClick = { YtDownloadQueue.remove(item.id) }) {
                             Icon(Icons.Outlined.Delete, contentDescription = "Delete")
