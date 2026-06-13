@@ -384,6 +384,7 @@
     <string name="label_komik">Komik</string>
     <string name="label_komik_library">Komik Library</string>
     <string name="label_favorite">Favorite</string>
+    <string name="label_recommended">Recommended</string>
     <string name="label_saved">Saved</string>
     <string name="label_upload">Upload</string>
     <string name="label_recent">Recent</string>

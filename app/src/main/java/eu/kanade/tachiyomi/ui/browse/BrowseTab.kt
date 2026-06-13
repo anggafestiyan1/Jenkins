@@ -18,6 +18,7 @@ import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.browse.manga.extension.MangaExtensionsScreenModel
 import eu.kanade.tachiyomi.ui.browse.manga.extension.mangaExtensionsTab
+import eu.kanade.tachiyomi.ui.browse.manga.extension.mangaRecommendedTab
 import eu.kanade.tachiyomi.ui.browse.manga.migration.sources.migrateMangaSourceTab
 import eu.kanade.tachiyomi.ui.browse.manga.source.globalsearch.GlobalMangaSearchScreen
 import eu.kanade.tachiyomi.ui.browse.manga.source.mangaSourcesTab
@@ -64,6 +65,7 @@ data object BrowseTab : Tab {
 
         val tabs = persistentListOf(
             mangaSourcesTab(),
+            mangaRecommendedTab(),
             mangaExtensionsTab(mangaExtensionsScreenModel),
             migrateMangaSourceTab(),
         )
@@ -74,8 +76,11 @@ data object BrowseTab : Tab {
             titleRes = MR.strings.browse,
             tabs = tabs,
             state = state,
+            // Pass the extensions search query to both slots so it works regardless of tab index parity.
             mangaSearchQuery = mangaExtensionsState.searchQuery,
             onChangeMangaSearchQuery = mangaExtensionsScreenModel::search,
+            animeSearchQuery = mangaExtensionsState.searchQuery,
+            onChangeAnimeSearchQuery = mangaExtensionsScreenModel::search,
             scrollable = true,
         )
         LaunchedEffect(Unit) {

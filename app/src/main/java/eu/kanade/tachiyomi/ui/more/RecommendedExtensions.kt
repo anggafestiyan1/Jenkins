@@ -27,6 +27,10 @@ object RecommendedExtensions {
         "shinigami", "sekte komik", "maid - manga", "bacakomik", "komik station", "softkomik",
     )
 
+    val ALL: List<String> = ENGLISH + INDONESIAN
+
+    fun isRecommended(name: String): Boolean = ALL.any { name.contains(it, ignoreCase = true) }
+
     suspend fun installEnglish(): Int {
         sourcePreferences.enabledLanguages() += "en"
         return install(ENGLISH)
