@@ -132,19 +132,19 @@ object YtDownloadQueue {
             ?: throw IllegalStateException("Lokasi storage belum diatur")
         val dir = baseDir.findFile(folder) ?: baseDir.createDirectory(folder)
             ?: throw IllegalStateException("Gagal membuat folder")
-        val fileName = "video.${stream.extension}"
+        // Use the real extension (mp4/webm) — SAF rejects unknown extensions like ".tmp".
+        val extension = stream.extension.ifBlank { "mp4" }
+        val fileName = "video.$extension"
 
-        if (dir.findFile(fileName) == null) {
-            val tmp = dir.findFile("video.tmp") ?: dir.createFile("video.tmp")
-                ?: throw IllegalStateException("Gagal membuat file")
-            val ok = download(stream.streamUrl, tmp, item.id)
-            if (!ok) {
-                tmp.delete()
-                // Distinguish abort (pause/remove) from a real download failure.
-                if (_paused.value || _state.value.none { it.id == item.id }) return false
-                throw IllegalStateException("Download gagal")
-            }
-            tmp.renameTo(fileName)
+        // Always download fresh to avoid leftover partial files being treated as complete.
+        dir.findFile(fileName)?.delete()
+        val target = dir.createFile(fileName) ?: throw IllegalStateException("Gagal membuat file ($fileName)")
+        val ok = download(stream.streamUrl, target, item.id)
+        if (!ok) {
+            target.delete()
+            // Distinguish abort (pause/remove) from a real download failure.
+            if (_paused.value || _state.value.none { it.id == item.id }) return false
+            throw IllegalStateException("Download gagal")
         }
 
         // Index into the local film library so it plays offline.
