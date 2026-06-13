@@ -23,6 +23,7 @@ import eu.kanade.tachiyomi.ui.browse.manga.migration.sources.migrateMangaSourceT
 import eu.kanade.tachiyomi.ui.browse.manga.source.globalsearch.GlobalMangaSearchScreen
 import eu.kanade.tachiyomi.ui.browse.manga.source.mangaSourcesTab
 import eu.kanade.tachiyomi.ui.main.MainActivity
+import eu.kanade.tachiyomi.ui.more.moreTab
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
@@ -68,6 +69,7 @@ data object BrowseTab : Tab {
             mangaRecommendedTab(),
             mangaExtensionsTab(mangaExtensionsScreenModel),
             migrateMangaSourceTab(),
+            moreTab(),
         )
 
         val state = rememberPagerState { tabs.size }

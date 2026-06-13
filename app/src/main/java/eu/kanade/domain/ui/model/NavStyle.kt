@@ -12,7 +12,6 @@ import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.browse.BrowseTab
 import eu.kanade.tachiyomi.ui.library.anime.AnimeLibraryTab
 import eu.kanade.tachiyomi.ui.library.manga.MangaLibraryTab
-import eu.kanade.tachiyomi.ui.more.MoreTab
 import eu.kanade.tachiyomi.ui.novel.NovelTab
 import eu.kanade.tachiyomi.ui.youtube.YouTubeTab
 import tachiyomi.i18n.aniyomi.AYMR
@@ -38,13 +37,13 @@ enum class NavStyle(
 
     val tabs: List<Tab>
         get() {
+            // MoreTab is no longer a bottom-nav destination — it lives as a tab inside Browse.
             return mutableListOf(
                 AnimeLibraryTab,
                 MangaLibraryTab,
                 NovelTab,
                 YouTubeTab,
                 BrowseTab,
-                MoreTab,
             ).apply { moreTab?.let { remove(it) } }
         }
 

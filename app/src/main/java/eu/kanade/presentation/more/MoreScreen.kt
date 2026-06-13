@@ -1,5 +1,6 @@
 package eu.kanade.presentation.more
 
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CloudOff
@@ -50,139 +51,172 @@ fun MoreScreen(
     onClickSettings: () -> Unit,
     onClickAbout: () -> Unit,
 ) {
+    Scaffold { contentPadding ->
+        MoreScreenContent(
+            contentPadding = contentPadding,
+            downloadQueueStateProvider = downloadQueueStateProvider,
+            downloadedOnly = downloadedOnly,
+            onDownloadedOnlyChange = onDownloadedOnlyChange,
+            incognitoMode = incognitoMode,
+            onIncognitoModeChange = onIncognitoModeChange,
+            onClickDownloadQueue = onClickDownloadQueue,
+            onClickQuickBackup = onClickQuickBackup,
+            onClickRestore = onClickRestore,
+            onClickSettings = onClickSettings,
+            onClickAbout = onClickAbout,
+        )
+    }
+}
+
+/**
+ * The body of the More screen, without its own [Scaffold] — so it can be reused both as a
+ * standalone screen and embedded as a tab (e.g. inside Browse) using the provided [contentPadding].
+ */
+@Composable
+fun MoreScreenContent(
+    contentPadding: PaddingValues,
+    downloadQueueStateProvider: () -> DownloadQueueState,
+    downloadedOnly: Boolean,
+    onDownloadedOnlyChange: (Boolean) -> Unit,
+    incognitoMode: Boolean,
+    onIncognitoModeChange: (Boolean) -> Unit,
+    onClickDownloadQueue: () -> Unit,
+    onClickQuickBackup: () -> Unit,
+    onClickRestore: () -> Unit,
+    onClickSettings: () -> Unit,
+    onClickAbout: () -> Unit,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val chapterCache = remember { Injekt.get<ChapterCache>() }
 
-    Scaffold { contentPadding ->
-        ScrollbarLazyColumn(
-            modifier = Modifier.padding(contentPadding),
-        ) {
-            item { LogoHeader() }
+    ScrollbarLazyColumn(
+        modifier = Modifier.padding(contentPadding),
+    ) {
+        item { LogoHeader() }
 
-            item {
-                SwitchPreferenceWidget(
-                    title = stringResource(MR.strings.label_downloaded_only),
-                    subtitle = stringResource(MR.strings.downloaded_only_summary),
-                    icon = Icons.Outlined.CloudOff,
-                    checked = downloadedOnly,
-                    onCheckedChanged = onDownloadedOnlyChange,
-                )
-            }
-            item {
-                SwitchPreferenceWidget(
-                    title = stringResource(MR.strings.pref_incognito_mode),
-                    subtitle = stringResource(AYMR.strings.pref_incognito_mode_summary),
-                    icon = ImageVector.vectorResource(R.drawable.ic_glasses_24dp),
-                    checked = incognitoMode,
-                    onCheckedChanged = onIncognitoModeChange,
-                )
-            }
+        item {
+            SwitchPreferenceWidget(
+                title = stringResource(MR.strings.label_downloaded_only),
+                subtitle = stringResource(MR.strings.downloaded_only_summary),
+                icon = Icons.Outlined.CloudOff,
+                checked = downloadedOnly,
+                onCheckedChanged = onDownloadedOnlyChange,
+            )
+        }
+        item {
+            SwitchPreferenceWidget(
+                title = stringResource(MR.strings.pref_incognito_mode),
+                subtitle = stringResource(AYMR.strings.pref_incognito_mode_summary),
+                icon = ImageVector.vectorResource(R.drawable.ic_glasses_24dp),
+                checked = incognitoMode,
+                onCheckedChanged = onIncognitoModeChange,
+            )
+        }
 
-            item { HorizontalDivider() }
+        item { HorizontalDivider() }
 
-            item {
-                val downloadQueueState = downloadQueueStateProvider()
-                TextPreferenceWidget(
-                    title = stringResource(MR.strings.label_download_queue),
-                    subtitle = when (downloadQueueState) {
-                        DownloadQueueState.Stopped -> null
-                        is DownloadQueueState.Paused -> {
-                            val pending = downloadQueueState.pending
-                            if (pending == 0) {
-                                stringResource(MR.strings.paused)
-                            } else {
-                                "${stringResource(MR.strings.paused)} • ${
-                                    pluralStringResource(MR.plurals.download_queue_summary, count = pending, pending)
-                                }"
-                            }
+        item {
+            val downloadQueueState = downloadQueueStateProvider()
+            TextPreferenceWidget(
+                title = stringResource(MR.strings.label_download_queue),
+                subtitle = when (downloadQueueState) {
+                    DownloadQueueState.Stopped -> null
+                    is DownloadQueueState.Paused -> {
+                        val pending = downloadQueueState.pending
+                        if (pending == 0) {
+                            stringResource(MR.strings.paused)
+                        } else {
+                            "${stringResource(MR.strings.paused)} • ${
+                                pluralStringResource(MR.plurals.download_queue_summary, count = pending, pending)
+                            }"
                         }
-                        is DownloadQueueState.Downloading -> {
-                            val pending = downloadQueueState.pending
-                            pluralStringResource(MR.plurals.download_queue_summary, count = pending, pending)
-                        }
-                    },
-                    icon = Icons.Outlined.GetApp,
-                    onPreferenceClick = onClickDownloadQueue,
-                )
-            }
-            item {
-                TextPreferenceWidget(
-                    title = "Backup ke Download (1-klik)",
-                    subtitle = "Simpan history + library favorit ke folder Download",
-                    icon = Icons.Outlined.SaveAlt,
-                    onPreferenceClick = onClickQuickBackup,
-                )
-            }
-            item {
-                TextPreferenceWidget(
-                    title = stringResource(MR.strings.pref_restore_backup),
-                    icon = Icons.Outlined.SettingsBackupRestore,
-                    onPreferenceClick = onClickRestore,
-                )
-            }
-            item {
-                TextPreferenceWidget(
-                    title = "Hapus cache",
-                    subtitle = "Hapus gambar yang sudah dibaca (history & download tetap aman)",
-                    icon = Icons.Outlined.DeleteSweep,
-                    onPreferenceClick = {
-                        scope.launch {
-                            val deleted = withIOContext { chapterCache.clear() }
-                            context.toast("Cache dihapus: $deleted file")
-                        }
-                    },
-                )
-            }
+                    }
+                    is DownloadQueueState.Downloading -> {
+                        val pending = downloadQueueState.pending
+                        pluralStringResource(MR.plurals.download_queue_summary, count = pending, pending)
+                    }
+                },
+                icon = Icons.Outlined.GetApp,
+                onPreferenceClick = onClickDownloadQueue,
+            )
+        }
+        item {
+            TextPreferenceWidget(
+                title = "Backup ke Download (1-klik)",
+                subtitle = "Simpan history + library favorit ke folder Download",
+                icon = Icons.Outlined.SaveAlt,
+                onPreferenceClick = onClickQuickBackup,
+            )
+        }
+        item {
+            TextPreferenceWidget(
+                title = stringResource(MR.strings.pref_restore_backup),
+                icon = Icons.Outlined.SettingsBackupRestore,
+                onPreferenceClick = onClickRestore,
+            )
+        }
+        item {
+            TextPreferenceWidget(
+                title = "Hapus cache",
+                subtitle = "Hapus gambar yang sudah dibaca (history & download tetap aman)",
+                icon = Icons.Outlined.DeleteSweep,
+                onPreferenceClick = {
+                    scope.launch {
+                        val deleted = withIOContext { chapterCache.clear() }
+                        context.toast("Cache dihapus: $deleted file")
+                    }
+                },
+            )
+        }
 
-            item {
-                TextPreferenceWidget(
-                    title = "Install extension komik — English",
-                    subtitle = "Asura, MangaDex, Flame, Hades, Lunar, Webtoon, dll",
-                    icon = Icons.Outlined.Extension,
-                    onPreferenceClick = {
-                        scope.launch {
-                            context.toast("Mencari extension…")
-                            val count = RecommendedExtensions.installEnglish()
-                            context.toast(installResultMessage(count))
-                        }
-                    },
-                )
-            }
-            item {
-                TextPreferenceWidget(
-                    title = "Install extension komik — Indonesia",
-                    subtitle = "Kiryuu, KomikIndo, Komiku, ManhwaDesu, Shinigami, dll",
-                    icon = Icons.Outlined.Extension,
-                    onPreferenceClick = {
-                        scope.launch {
-                            context.toast("Mencari extension…")
-                            val count = RecommendedExtensions.installIndonesian()
-                            context.toast(installResultMessage(count))
-                        }
-                    },
-                )
-            }
+        item {
+            TextPreferenceWidget(
+                title = "Install extension komik — English",
+                subtitle = "Asura, MangaDex, Flame, Hades, Lunar, Webtoon, dll",
+                icon = Icons.Outlined.Extension,
+                onPreferenceClick = {
+                    scope.launch {
+                        context.toast("Mencari extension…")
+                        val count = RecommendedExtensions.installEnglish()
+                        context.toast(installResultMessage(count))
+                    }
+                },
+            )
+        }
+        item {
+            TextPreferenceWidget(
+                title = "Install extension komik — Indonesia",
+                subtitle = "Kiryuu, KomikIndo, Komiku, ManhwaDesu, Shinigami, dll",
+                icon = Icons.Outlined.Extension,
+                onPreferenceClick = {
+                    scope.launch {
+                        context.toast("Mencari extension…")
+                        val count = RecommendedExtensions.installIndonesian()
+                        context.toast(installResultMessage(count))
+                    }
+                },
+            )
+        }
 
-            item { HorizontalDivider() }
+        item { HorizontalDivider() }
 
-            item {
-                PreferenceGroupHeader(title = stringResource(AYMR.strings.label_app))
-            }
-            item {
-                TextPreferenceWidget(
-                    title = stringResource(MR.strings.label_settings),
-                    icon = Icons.Outlined.Settings,
-                    onPreferenceClick = onClickSettings,
-                )
-            }
-            item {
-                TextPreferenceWidget(
-                    title = stringResource(MR.strings.pref_category_about),
-                    icon = Icons.Outlined.Info,
-                    onPreferenceClick = onClickAbout,
-                )
-            }
+        item {
+            PreferenceGroupHeader(title = stringResource(AYMR.strings.label_app))
+        }
+        item {
+            TextPreferenceWidget(
+                title = stringResource(MR.strings.label_settings),
+                icon = Icons.Outlined.Settings,
+                onPreferenceClick = onClickSettings,
+            )
+        }
+        item {
+            TextPreferenceWidget(
+                title = stringResource(MR.strings.pref_category_about),
+                icon = Icons.Outlined.Info,
+                onPreferenceClick = onClickAbout,
+            )
         }
     }
 }

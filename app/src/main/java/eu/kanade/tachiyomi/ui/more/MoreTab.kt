@@ -113,7 +113,7 @@ data object MoreTab : Tab {
     }
 }
 
-private class MoreScreenModel(
+internal class MoreScreenModel(
     private val downloadManager: MangaDownloadManager = Injekt.get(),
     private val animeDownloadManager: AnimeDownloadManager = Injekt.get(),
     preferences: BasePreferences = Injekt.get(),
