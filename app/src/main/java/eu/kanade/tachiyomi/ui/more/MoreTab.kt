@@ -25,7 +25,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import eu.kanade.presentation.more.MoreScreen
-import eu.kanade.presentation.more.settings.screen.data.CreateBackupScreen
 import eu.kanade.presentation.more.settings.screen.data.RestoreBackupScreen
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
@@ -33,11 +32,8 @@ import eu.kanade.tachiyomi.data.backup.QuickBackup
 import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadManager
 import eu.kanade.tachiyomi.data.download.manga.MangaDownloadManager
-import eu.kanade.tachiyomi.ui.category.CategoriesTab
 import eu.kanade.tachiyomi.ui.download.DownloadsTab
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
-import eu.kanade.tachiyomi.ui.stats.StatsTab
-import eu.kanade.tachiyomi.ui.storage.StorageTab
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -98,10 +94,6 @@ data object MoreTab : Tab {
             incognitoMode = screenModel.incognitoMode,
             onIncognitoModeChange = { screenModel.incognitoMode = it },
             onClickDownloadQueue = { navigator.push(DownloadsTab) },
-            onClickCategories = { navigator.push(CategoriesTab) },
-            onClickStats = { navigator.push(StatsTab) },
-            onClickStorage = { navigator.push(StorageTab) },
-            onClickBackup = { navigator.push(CreateBackupScreen()) },
             onClickQuickBackup = {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q ||
                     ContextCompat.checkSelfPermission(

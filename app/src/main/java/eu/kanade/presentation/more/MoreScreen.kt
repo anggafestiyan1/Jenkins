@@ -2,35 +2,38 @@ package eu.kanade.presentation.more
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.HelpOutline
-import androidx.compose.material.icons.automirrored.outlined.Label
-import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.CloudOff
+import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.GetApp
-import androidx.compose.material.icons.outlined.SaveAlt
-import androidx.compose.material.icons.outlined.SettingsBackupRestore
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.QueryStats
+import androidx.compose.material.icons.outlined.SaveAlt
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Storage
+import androidx.compose.material.icons.outlined.SettingsBackupRestore
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.vectorResource
 import eu.kanade.presentation.more.settings.widget.PreferenceGroupHeader
 import eu.kanade.presentation.more.settings.widget.SwitchPreferenceWidget
 import eu.kanade.presentation.more.settings.widget.TextPreferenceWidget
 import eu.kanade.tachiyomi.R
-import eu.kanade.tachiyomi.core.common.Constants
+import eu.kanade.tachiyomi.data.cache.ChapterCache
 import eu.kanade.tachiyomi.ui.more.DownloadQueueState
+import eu.kanade.tachiyomi.util.system.toast
+import kotlinx.coroutines.launch
+import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 @Composable
 fun MoreScreen(
@@ -40,24 +43,21 @@ fun MoreScreen(
     incognitoMode: Boolean,
     onIncognitoModeChange: (Boolean) -> Unit,
     onClickDownloadQueue: () -> Unit,
-    onClickCategories: () -> Unit,
-    onClickStats: () -> Unit,
-    onClickStorage: () -> Unit,
-    onClickBackup: () -> Unit,
     onClickQuickBackup: () -> Unit,
     onClickRestore: () -> Unit,
     onClickSettings: () -> Unit,
     onClickAbout: () -> Unit,
 ) {
-    val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val chapterCache = remember { Injekt.get<ChapterCache>() }
 
     Scaffold { contentPadding ->
         ScrollbarLazyColumn(
             modifier = Modifier.padding(contentPadding),
         ) {
-            item {
-                LogoHeader()
-            }
+            item { LogoHeader() }
+
             item {
                 SwitchPreferenceWidget(
                     title = stringResource(MR.strings.label_downloaded_only),
@@ -80,10 +80,6 @@ fun MoreScreen(
             item { HorizontalDivider() }
 
             item {
-                PreferenceGroupHeader(title = stringResource(AYMR.strings.label_library_tools))
-            }
-
-            item {
                 val downloadQueueState = downloadQueueStateProvider()
                 TextPreferenceWidget(
                     title = stringResource(MR.strings.label_download_queue),
@@ -95,22 +91,13 @@ fun MoreScreen(
                                 stringResource(MR.strings.paused)
                             } else {
                                 "${stringResource(MR.strings.paused)} • ${
-                                    pluralStringResource(
-                                        MR.plurals.download_queue_summary,
-                                        count = pending,
-                                        pending,
-                                    )
+                                    pluralStringResource(MR.plurals.download_queue_summary, count = pending, pending)
                                 }"
                             }
                         }
-
                         is DownloadQueueState.Downloading -> {
                             val pending = downloadQueueState.pending
-                            pluralStringResource(
-                                MR.plurals.download_queue_summary,
-                                count = pending,
-                                pending,
-                            )
+                            pluralStringResource(MR.plurals.download_queue_summary, count = pending, pending)
                         }
                     },
                     icon = Icons.Outlined.GetApp,
@@ -119,35 +106,8 @@ fun MoreScreen(
             }
             item {
                 TextPreferenceWidget(
-                    title = stringResource(AYMR.strings.general_categories),
-                    icon = Icons.AutoMirrored.Outlined.Label,
-                    onPreferenceClick = onClickCategories,
-                )
-            }
-            item {
-                TextPreferenceWidget(
-                    title = stringResource(MR.strings.label_stats),
-                    icon = Icons.Outlined.QueryStats,
-                    onPreferenceClick = onClickStats,
-                )
-            }
-            item {
-                TextPreferenceWidget(
-                    title = stringResource(AYMR.strings.label_storage_usage),
-                    icon = Icons.Outlined.Storage,
-                    onPreferenceClick = onClickStorage,
-                )
-            }
-            item {
-                TextPreferenceWidget(
-                    title = stringResource(MR.strings.pref_create_backup),
-                    icon = Icons.Outlined.Backup,
-                    onPreferenceClick = onClickBackup,
-                )
-            }
-            item {
-                TextPreferenceWidget(
-                    title = "Backup ke Download (1-tap)",
+                    title = "Backup ke Download (1-klik)",
+                    subtitle = "Simpan history + library favorit ke folder Download",
                     icon = Icons.Outlined.SaveAlt,
                     onPreferenceClick = onClickQuickBackup,
                 )
@@ -159,13 +119,25 @@ fun MoreScreen(
                     onPreferenceClick = onClickRestore,
                 )
             }
+            item {
+                TextPreferenceWidget(
+                    title = "Hapus cache",
+                    subtitle = "Hapus gambar yang sudah dibaca (history & download tetap aman)",
+                    icon = Icons.Outlined.DeleteSweep,
+                    onPreferenceClick = {
+                        scope.launch {
+                            val deleted = withIOContext { chapterCache.clear() }
+                            context.toast("Cache dihapus: $deleted file")
+                        }
+                    },
+                )
+            }
 
             item { HorizontalDivider() }
 
             item {
                 PreferenceGroupHeader(title = stringResource(AYMR.strings.label_app))
             }
-
             item {
                 TextPreferenceWidget(
                     title = stringResource(MR.strings.label_settings),
@@ -178,13 +150,6 @@ fun MoreScreen(
                     title = stringResource(MR.strings.pref_category_about),
                     icon = Icons.Outlined.Info,
                     onPreferenceClick = onClickAbout,
-                )
-            }
-            item {
-                TextPreferenceWidget(
-                    title = stringResource(MR.strings.label_help),
-                    icon = Icons.AutoMirrored.Outlined.HelpOutline,
-                    onPreferenceClick = { uriHandler.openUri(Constants.URL_HELP) },
                 )
             }
         }
