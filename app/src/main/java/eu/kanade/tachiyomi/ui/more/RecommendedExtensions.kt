@@ -1,9 +1,11 @@
 package eu.kanade.tachiyomi.ui.more
 
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.extension.manga.MangaExtensionManager
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
+import tachiyomi.core.common.preference.plusAssign
 import uy.kohesive.injekt.injectLazy
 
 /**
@@ -13,6 +15,7 @@ import uy.kohesive.injekt.injectLazy
 object RecommendedExtensions {
 
     private val extensionManager: MangaExtensionManager by injectLazy()
+    private val sourcePreferences: SourcePreferences by injectLazy()
 
     private val ENGLISH = listOf(
         "allmanga", "asura", "flame", "hades", "lunar", "mangadex",
@@ -24,9 +27,16 @@ object RecommendedExtensions {
         "shinigami", "sekte komik", "maid - manga", "bacakomik", "komik station", "softkomik",
     )
 
-    suspend fun installEnglish(): Int = install(ENGLISH)
+    suspend fun installEnglish(): Int {
+        sourcePreferences.enabledLanguages() += "en"
+        return install(ENGLISH)
+    }
 
-    suspend fun installIndonesian(): Int = install(INDONESIAN)
+    suspend fun installIndonesian(): Int {
+        // Enable Indonesian so installed Indonesian sources show up in the source list.
+        sourcePreferences.enabledLanguages() += "id"
+        return install(INDONESIAN)
+    }
 
     private suspend fun install(keywords: List<String>): Int {
         extensionManager.findAvailableExtensions()

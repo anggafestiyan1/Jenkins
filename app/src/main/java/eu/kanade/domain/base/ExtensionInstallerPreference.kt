@@ -26,11 +26,8 @@ class ExtensionInstallerPreference(
         }
     }
 
-    override fun defaultValue() = if (context.hasMiuiPackageInstaller) {
-        ExtensionInstaller.LEGACY
-    } else {
-        ExtensionInstaller.PACKAGEINSTALLER
-    }
+    // Private installer: installs extensions without the system install dialog (no root needed).
+    override fun defaultValue() = ExtensionInstaller.PRIVATE
 
     private fun check(value: ExtensionInstaller): ExtensionInstaller {
         when (value) {
