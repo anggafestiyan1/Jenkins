@@ -19,7 +19,15 @@ object YouTubeSource {
     private val network: NetworkHelper by injectLazy()
     private val initialized = AtomicBoolean(false)
 
+    /** NewPipeExtractor (current version) uses URLEncoder.encode(String, Charset), added in API 29. */
+    private fun requireSupported() {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) {
+            throw UnsupportedOperationException("Fitur YouTube butuh Android 10 ke atas")
+        }
+    }
+
     private fun ensureInit() {
+        requireSupported()
         if (initialized.compareAndSet(false, true)) {
             NewPipe.init(NewPipeDownloader(network.client))
         }
