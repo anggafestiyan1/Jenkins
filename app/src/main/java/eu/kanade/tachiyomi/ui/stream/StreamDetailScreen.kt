@@ -164,6 +164,7 @@ class StreamDetailScreen(private val item: StreamItem) : Screen() {
                     StreamWebPlayerScreen(
                         url = pending.url,
                         title = if (item.isSeries) "${item.title} — ${pending.episode.name}" else item.title,
+                        referer = pending.referer,
                     ),
                 )
                 model.clearPending()
@@ -206,7 +207,11 @@ class StreamDetailScreenModel(private val item: StreamItem) :
             try {
                 val targets = source.playTargets(episode)
                 val target = targets.firstOrNull() ?: episode.url
-                mutableState.update { it.copy(resolving = null, pending = Pending(episode, target)) }
+                // Referer = the page that embeds the player (what referer-gated hosts expect).
+                val referer = if (target == episode.url) source.baseUrl else episode.url
+                mutableState.update {
+                    it.copy(resolving = null, pending = Pending(episode, target, referer))
+                }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Throwable) {
@@ -220,7 +225,7 @@ class StreamDetailScreenModel(private val item: StreamItem) :
 
     fun clearResolveError() = mutableState.update { it.copy(resolveError = null) }
 
-    data class Pending(val episode: StreamEpisode, val url: String)
+    data class Pending(val episode: StreamEpisode, val url: String, val referer: String)
 
     data class State(
         val loading: Boolean = true,

@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.ui.stream
 import android.annotation.SuppressLint
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -24,16 +25,17 @@ import androidx.compose.ui.viewinterop.AndroidView
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.util.Screen
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import java.io.ByteArrayInputStream
 
 /**
- * Streaming player: loads the host's own web player (embed/watch page) in a WebView. Far more
- * reliable than scraping the direct media URL out of obfuscated hosts. Blocks cross-host top-level
- * navigations and window.open popups to cut down on the ad redirects these sites are full of.
+ * Streaming player: loads the host's own web player (embed/watch page) in a WebView — far more
+ * reliable than scraping the direct media URL out of obfuscated hosts. Blocks ad-network requests
+ * and window.open popups, and forwards a Referer so referer-gated embeds (Cloudflare) load.
  */
 class StreamWebPlayerScreen(
     private val url: String,
     private val title: String,
+    private val referer: String = "",
 ) : Screen() {
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -42,7 +44,7 @@ class StreamWebPlayerScreen(
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val target = url
-        val initialHost = url.toHttpUrlOrNull()?.host.orEmpty()
+        val ref = referer
 
         Scaffold(
             containerColor = Color.Black,
@@ -70,29 +72,41 @@ class StreamWebPlayerScreen(
                             useWideViewPort = true
                             @Suppress("DEPRECATION")
                             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                            // Block popups (window.open ad popunders).
                             setSupportMultipleWindows(false)
                             javaScriptCanOpenWindowsAutomatically = false
                             userAgentString = userAgentString.replace("; wv", "")
                         }
-                        // Enables HTML5 video / fullscreen handling.
                         webChromeClient = WebChromeClient()
                         webViewClient = object : WebViewClient() {
+                            override fun shouldInterceptRequest(
+                                view: WebView,
+                                request: WebResourceRequest,
+                            ): WebResourceResponse? {
+                                if (AdBlock.isAd(request.url.toString())) {
+                                    return WebResourceResponse(
+                                        "text/plain",
+                                        "utf-8",
+                                        ByteArrayInputStream(ByteArray(0)),
+                                    )
+                                }
+                                return null
+                            }
+
                             override fun shouldOverrideUrlLoading(
                                 view: WebView,
                                 request: WebResourceRequest,
                             ): Boolean {
-                                // Block top-level navigations to a different host (ad popups/redirects);
-                                // allow the player's own host + sub-resources to load normally.
-                                if (request.isForMainFrame) {
-                                    val host = request.url.host.orEmpty()
-                                    if (initialHost.isNotEmpty() && host.isNotEmpty() && host != initialHost) {
-                                        return true
-                                    }
-                                }
-                                return false
+                                // Block only main-frame navigations to ad hosts; allow legit player
+                                // redirects (e.g. interstitial → real player) to proceed.
+                                return request.isForMainFrame && AdBlock.isAd(request.url.toString())
                             }
                         }
-                        loadUrl(target)
+                        if (ref.isNotBlank()) {
+                            loadUrl(target, mapOf("Referer" to ref))
+                        } else {
+                            loadUrl(target)
+                        }
                     }
                 },
             )

@@ -99,7 +99,8 @@ abstract class BaseStreamSource : StreamSource {
         "div.search-item, article.mega-item, div.item-article, div.ml-item, div.grid-item, article"
 
     protected open fun episodeSelector(): String =
-        "div.episode-list a, .serie a, #episode a, .episodios a, ul.episodios li a, .eps a"
+        "#seasons .episodios li a, .episodios li a, div.episode-list a, .serie a, #episode a, " +
+            ".eps a, .ep-item a, .eplister a, .les-content a"
 
     protected fun parseCards(doc: Document): List<StreamItem> {
         val byContainer = extract(doc.select(listSelector()))
@@ -152,20 +153,11 @@ abstract class BaseStreamSource : StreamSource {
                 StreamEpisode(name = a.text().ifBlank { "Episode" }, url = href)
             }.reversed()
         } else {
-            // Movie: prefer the dedicated watch/"nonton" page if there is one, else the detail page.
-            listOf(StreamEpisode(name = "Tonton", url = findWatchUrl(d) ?: item.url))
+            // Movie: the player lives on the detail page itself (DooPlay-style server tabs/iframes);
+            // following the on-page "Nonton" button tends to hit promo/interstitial redirects.
+            listOf(StreamEpisode(name = "Tonton", url = item.url))
         }
         return StreamDetail(synopsis = synopsis, episodes = episodes)
-    }
-
-    private fun findWatchUrl(d: Document): String? {
-        return d.select("a[href]").firstOrNull { a ->
-            val t = a.text().lowercase()
-            val h = a.absUrl("href").lowercase()
-            a.hasClass("btn-watch") || a.hasClass("watch") ||
-                t.contains("nonton") || t.contains("tonton") || t.contains("watch") || t.contains("play") ||
-                h.contains("/nonton") || h.contains("/tonton") || h.contains("/play")
-        }?.absUrl("href")?.ifBlank { null }
     }
 
     /** Hints that a URL is a video host/embed (not an ad or page chrome). */
