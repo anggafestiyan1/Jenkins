@@ -3,10 +3,10 @@ package eu.kanade.tachiyomi.ui.stream
 import android.app.Application
 import android.content.Context
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import org.jsoup.nodes.Document
+import org.jsoup.select.Elements
 import tachiyomi.core.common.util.lang.withIOContext
 import uy.kohesive.injekt.injectLazy
 
@@ -79,8 +79,6 @@ object StreamPrefs {
  */
 abstract class BaseStreamSource : StreamSource {
 
-    protected val network: NetworkHelper by injectLazy()
-
     protected abstract val defaultBaseUrl: String
 
     override var baseUrl: String
@@ -88,7 +86,7 @@ abstract class BaseStreamSource : StreamSource {
         set(value) = StreamPrefs.setBaseUrl(id, value)
 
     protected suspend fun doc(url: String): Document = withIOContext {
-        network.client.newCall(GET(url)).awaitSuccess().asJsoup()
+        StreamHttp.client.newCall(GET(url)).awaitSuccess().asJsoup()
     }
 
     /** Containers that each wrap one result card. Override per source. */
@@ -99,18 +97,33 @@ abstract class BaseStreamSource : StreamSource {
         "div.episode-list a, .serie a, #episode a, .episodios a, ul.episodios li a, .eps a"
 
     protected fun parseCards(doc: Document): List<StreamItem> {
+        val byContainer = extract(doc.select(listSelector()))
+        if (byContainer.isNotEmpty()) return byContainer
+        // Fallback: generic — any anchor that wraps a poster image (resilient to theme changes).
+        return extract(doc.select("a:has(img)"))
+    }
+
+    private fun extract(elements: Elements): List<StreamItem> {
         val seen = HashSet<String>()
-        return doc.select(listSelector()).mapNotNull { el ->
-            val a = el.selectFirst("a[href]") ?: return@mapNotNull null
+        return elements.mapNotNull { el ->
+            val a = if (el.tagName() == "a") el else el.selectFirst("a[href]") ?: return@mapNotNull null
             val href = a.absUrl("href").ifBlank { a.attr("href") }
-            if (href.isBlank() || !seen.add(href)) return@mapNotNull null
+            if (href.isBlank() || !href.startsWith("http") || !seen.add(href)) return@mapNotNull null
+            // Skip obvious navigation/taxonomy links.
+            if (href.contains("/genre") || href.contains("/country") || href.contains("/year") ||
+                href.contains("/networks") || href.contains("javascript") || href.endsWith("#")
+            ) {
+                return@mapNotNull null
+            }
             val img = el.selectFirst("img")
-            val poster = (img?.absUrl("src")?.ifBlank { img.absUrl("data-src") }).orEmpty()
+            val poster = (
+                img?.absUrl("src")?.ifBlank { img.absUrl("data-src") }?.ifBlank { img.absUrl("data-original") }
+                ).orEmpty()
             val title = (
-                el.selectFirst("h2, h3, .title, .entry-title, .grid-title")?.text()
+                el.selectFirst("h2, h3, .title, .entry-title, .grid-title, .ml-title")?.text()
                     ?: a.attr("title").ifBlank { img?.attr("alt").orEmpty() }
                 ).trim()
-            if (title.isBlank()) return@mapNotNull null
+            if (title.isBlank() || poster.isBlank()) return@mapNotNull null
             StreamItem(
                 sourceId = id,
                 url = href,

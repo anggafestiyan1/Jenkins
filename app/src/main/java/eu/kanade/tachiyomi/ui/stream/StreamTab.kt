@@ -98,6 +98,7 @@ data object StreamTab : Tab {
         var activeSourceId by remember { mutableStateOf(StreamPrefs.activeSourceId()) }
         var showSourceMenu by remember { mutableStateOf(false) }
         var showDomainDialog by remember { mutableStateOf(false) }
+        var reloadTick by remember { mutableStateOf(0) }
         val source = StreamSources.byId(activeSourceId)
         val searchModel = rememberScreenModel { StreamSearchScreenModel() }
 
@@ -147,7 +148,7 @@ data object StreamTab : Tab {
             ) { page ->
                 val active = pagerState.currentPage == page
                 when (page) {
-                    0 -> SearchContent(searchModel, source)
+                    0 -> SearchContent(searchModel, source, reloadTick)
                     1 -> FavoriteContent()
                     2 -> HistoryContent()
                     3 -> OfflineContent(active)
@@ -157,14 +158,22 @@ data object StreamTab : Tab {
         }
 
         if (showDomainDialog) {
-            DomainDialog(source = source, onDismiss = { showDomainDialog = false })
+            DomainDialog(
+                source = source,
+                onDismiss = { showDomainDialog = false },
+                onSaved = {
+                    searchModel.reset()
+                    reloadTick++
+                    scope.launch { pagerState.animateScrollToPage(0) }
+                },
+            )
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DomainDialog(source: StreamSource, onDismiss: () -> Unit) {
+private fun DomainDialog(source: StreamSource, onDismiss: () -> Unit, onSaved: () -> Unit) {
     var value by remember { mutableStateOf(source.baseUrl) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -185,6 +194,7 @@ private fun DomainDialog(source: StreamSource, onDismiss: () -> Unit) {
             TextButton(onClick = {
                 source.baseUrl = value
                 onDismiss()
+                onSaved()
             }) { Text("Simpan") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Batal") } },
@@ -193,12 +203,13 @@ private fun DomainDialog(source: StreamSource, onDismiss: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SearchContent(model: StreamSearchScreenModel, source: StreamSource) {
+private fun SearchContent(model: StreamSearchScreenModel, source: StreamSource, reloadTick: Int) {
     val state by model.state.collectAsState()
     val navigator = LocalNavigator.currentOrThrow
 
-    LaunchedEffect(source.id) {
-        if (state.results.isEmpty() && !state.isLoading) model.loadPopular(source)
+    // Reload on first open, on source switch, and whenever the domain is changed (reloadTick).
+    LaunchedEffect(source.id, reloadTick) {
+        model.loadPopular(source)
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -429,7 +440,17 @@ class StreamSearchScreenModel : StateScreenModel<StreamSearchScreenModel.State>(
             mutableState.update { it.copy(isLoading = true, error = null) }
             try {
                 val results = source.popular(1)
-                mutableState.update { it.copy(isLoading = false, results = results) }
+                mutableState.update {
+                    it.copy(
+                        isLoading = false,
+                        results = results,
+                        error = if (results.isEmpty()) {
+                            "Daftar kosong — coba Search, atau selector belum cocok untuk domain ini."
+                        } else {
+                            null
+                        },
+                    )
+                }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Throwable) {

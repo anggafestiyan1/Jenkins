@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.ui.stream
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.NetworkHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -15,7 +14,6 @@ import kotlinx.coroutines.launch
 import logcat.LogPriority
 import okhttp3.Headers
 import tachiyomi.core.common.util.system.logcat
-import uy.kohesive.injekt.injectLazy
 import java.io.File
 import java.io.FileOutputStream
 
@@ -25,8 +23,6 @@ import java.io.FileOutputStream
  * supported in the MVP (streaming-only); only progressive MP4 hosts can be saved offline.
  */
 object StreamDownloadQueue {
-
-    private val network: NetworkHelper by injectLazy()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _state = MutableStateFlow<List<Item>>(emptyList())
@@ -138,7 +134,7 @@ object StreamDownloadQueue {
         val headers = Headers.Builder().apply {
             video.headers.forEach { (k, v) -> add(k, v) }
         }.build()
-        val response = network.client.newCall(GET(video.url, headers)).execute()
+        val response = StreamHttp.client.newCall(GET(video.url, headers)).execute()
         if (!response.isSuccessful) {
             response.close()
             return false
