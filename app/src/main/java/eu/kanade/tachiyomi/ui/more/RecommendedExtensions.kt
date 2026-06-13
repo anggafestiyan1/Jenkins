@@ -20,8 +20,8 @@ object RecommendedExtensions {
     )
 
     private val INDONESIAN = listOf(
-        "kiryuu", "komikindo", "komiku", "manhwadesu", "shinigami",
-        "komikcast", "westmanga", "mangakita", "sektekomik", "maid - manga",
+        "kiryuu", "komik cast", "komikindo", "komiku", "west manga", "manhwadesu",
+        "shinigami", "sekte komik", "maid - manga", "bacakomik", "komik station", "softkomik",
     )
 
     suspend fun installEnglish(): Int = install(ENGLISH)
