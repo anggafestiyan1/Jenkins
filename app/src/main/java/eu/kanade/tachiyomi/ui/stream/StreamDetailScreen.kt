@@ -29,6 +29,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -138,18 +139,7 @@ class StreamDetailScreen(private val item: StreamItem) : Screen() {
                             if (state.resolving == ep.url) {
                                 CircularProgressIndicator(Modifier.size(22.dp))
                             } else {
-                                IconButton(onClick = {
-                                    model.play(ep) { video ->
-                                        StreamStore.recordHistory(item, ep)
-                                        navigator.push(
-                                            StreamPlayerScreen(
-                                                url = video.url,
-                                                title = if (item.isSeries) "${item.title} — ${ep.name}" else item.title,
-                                                headers = HashMap(video.headers),
-                                            ),
-                                        )
-                                    }
-                                }) {
+                                IconButton(onClick = { model.play(ep) }) {
                                     Icon(Icons.Outlined.PlayArrow, contentDescription = "Play")
                                 }
                             }
@@ -162,6 +152,21 @@ class StreamDetailScreen(private val item: StreamItem) : Screen() {
                         }
                     }
                 }
+            }
+        }
+
+        // Open the WebView player when a play target is ready (main-thread safe).
+        val pending = state.pending
+        LaunchedEffect(pending) {
+            if (pending != null) {
+                StreamStore.recordHistory(item, pending.episode)
+                navigator.push(
+                    StreamWebPlayerScreen(
+                        url = pending.url,
+                        title = if (item.isSeries) "${item.title} — ${pending.episode.name}" else item.title,
+                    ),
+                )
+                model.clearPending()
             }
         }
 
@@ -195,18 +200,13 @@ class StreamDetailScreenModel(private val item: StreamItem) :
         }
     }
 
-    fun play(episode: StreamEpisode, onReady: (StreamVideo) -> Unit) {
+    fun play(episode: StreamEpisode) {
         screenModelScope.launchIO {
             mutableState.update { it.copy(resolving = episode.url) }
             try {
-                val videos = source.videos(episode)
-                val video = videos.firstOrNull { !it.isHls } ?: videos.firstOrNull()
-                mutableState.update { it.copy(resolving = null) }
-                if (video == null) {
-                    mutableState.update { it.copy(resolveError = "Tidak ada video yang bisa diputar") }
-                } else {
-                    onReady(video)
-                }
+                val targets = source.playTargets(episode)
+                val target = targets.firstOrNull() ?: episode.url
+                mutableState.update { it.copy(resolving = null, pending = Pending(episode, target)) }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Throwable) {
@@ -216,7 +216,11 @@ class StreamDetailScreenModel(private val item: StreamItem) :
         }
     }
 
+    fun clearPending() = mutableState.update { it.copy(pending = null) }
+
     fun clearResolveError() = mutableState.update { it.copy(resolveError = null) }
+
+    data class Pending(val episode: StreamEpisode, val url: String)
 
     data class State(
         val loading: Boolean = true,
@@ -225,5 +229,6 @@ class StreamDetailScreenModel(private val item: StreamItem) :
         val episodes: List<StreamEpisode> = emptyList(),
         val resolving: String? = null,
         val resolveError: String? = null,
+        val pending: Pending? = null,
     )
 }

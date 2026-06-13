@@ -50,6 +50,11 @@ interface StreamSource {
     suspend fun popular(page: Int): List<StreamItem>
     suspend fun search(query: String, page: Int): List<StreamItem>
     suspend fun detail(item: StreamItem): StreamDetail
+
+    /** Candidate web-player/embed page URLs to load in the WebView for streaming. */
+    suspend fun playTargets(episode: StreamEpisode): List<String>
+
+    /** Resolved direct media URLs for offline download (best-effort, MP4 only is downloadable). */
     suspend fun videos(episode: StreamEpisode): List<StreamVideo>
 }
 
@@ -147,23 +152,87 @@ abstract class BaseStreamSource : StreamSource {
                 StreamEpisode(name = a.text().ifBlank { "Episode" }, url = href)
             }.reversed()
         } else {
-            listOf(StreamEpisode(name = "Tonton", url = item.url))
+            // Movie: prefer the dedicated watch/"nonton" page if there is one, else the detail page.
+            listOf(StreamEpisode(name = "Tonton", url = findWatchUrl(d) ?: item.url))
         }
         return StreamDetail(synopsis = synopsis, episodes = episodes)
     }
 
-    override suspend fun videos(episode: StreamEpisode): List<StreamVideo> {
+    private fun findWatchUrl(d: Document): String? {
+        return d.select("a[href]").firstOrNull { a ->
+            val t = a.text().lowercase()
+            val h = a.absUrl("href").lowercase()
+            a.hasClass("btn-watch") || a.hasClass("watch") ||
+                t.contains("nonton") || t.contains("tonton") || t.contains("watch") || t.contains("play") ||
+                h.contains("/nonton") || h.contains("/tonton") || h.contains("/play")
+        }?.absUrl("href")?.ifBlank { null }
+    }
+
+    /** Hints that a URL is a video host/embed (not an ad or page chrome). */
+    private val hostHints = listOf(
+        "dood", "d000d", "dooood", "mixdrop", "filemoon", "streamtape", "vidhide", "streamwish",
+        "vidguard", "mp4upload", "filelions", "streamhub", "wibufile", "abysscdn", "pixeldrain",
+        "/embed", "/e/", "player", ".m3u8", ".mp4", "gdriveplayer", "hxfile", "lbx",
+    )
+
+    private fun looksLikeEmbed(url: String) = hostHints.any { url.contains(it, ignoreCase = true) }
+
+    private fun decodeBase64Url(s: String): String? = runCatching {
+        val decoded = String(android.util.Base64.decode(s, android.util.Base64.DEFAULT))
+        if (decoded.startsWith("http")) decoded.trim() else null
+    }.getOrNull()
+
+    /** Collects every plausible embed/player URL from a watch page (lazy attrs, base64, raw HTML). */
+    protected open suspend fun embedCandidates(episode: StreamEpisode): List<String> {
         val d = doc(episode.url)
-        val embeds = LinkedHashSet<String>()
-        d.select("iframe[src]").forEach { embeds.add(it.absUrl("src")) }
-        d.select("[data-frame], [data-src], [data-video], [data-player]").forEach { el ->
-            for (attr in listOf("data-frame", "data-src", "data-video", "data-player")) {
-                val v = el.attr(attr)
-                if (v.startsWith("http")) embeds.add(v)
+        val html = d.html()
+        val urls = LinkedHashSet<String>()
+
+        val attrs = listOf(
+            "src", "data-src", "data-frame", "data-video", "data-player", "data-embed",
+            "data-litespeed-src", "data-lazy-src",
+        )
+        d.select("iframe, [data-frame], [data-src], [data-video], [data-player], [data-embed], [data-litespeed-src], [data-lazy-src]")
+            .forEach { el ->
+                for (attr in attrs) {
+                    val v = el.attr(attr).trim()
+                    when {
+                        v.startsWith("http") -> urls.add(v)
+                        v.startsWith("//") -> urls.add("https:$v")
+                        v.length > 24 -> decodeBase64Url(v)?.let { urls.add(it) }
+                    }
+                }
             }
+
+        // <iframe src> that Jsoup may have left inside scripts/comments.
+        Regex("""<iframe[^>]+src=["']([^"']+)["']""", RegexOption.IGNORE_CASE).findAll(html).forEach {
+            var u = it.groupValues[1]
+            if (u.startsWith("//")) u = "https:$u"
+            if (u.startsWith("http")) urls.add(u)
         }
+        // Any bare URL that looks like a video host.
+        Regex("""https?://[^\s"'<>\\)]+""").findAll(html).forEach {
+            val u = it.value.replace("\\/", "/")
+            if (looksLikeEmbed(u)) urls.add(u)
+        }
+        // Long base64 blobs in scripts that decode to a URL.
+        Regex("""[A-Za-z0-9+/]{40,}={0,2}""").findAll(html).forEach { m ->
+            decodeBase64Url(m.value)?.let { if (it.startsWith("http")) urls.add(it) }
+        }
+
+        // Embed-looking URLs first; keep the rest as fallback.
+        return urls.sortedByDescending { looksLikeEmbed(it) }.distinct()
+    }
+
+    override suspend fun playTargets(episode: StreamEpisode): List<String> {
+        val candidates = embedCandidates(episode)
+        // If nothing embed-like was found, fall back to the watch page itself (WebView still plays it).
+        return candidates.ifEmpty { listOf(episode.url) }
+    }
+
+    override suspend fun videos(episode: StreamEpisode): List<StreamVideo> {
         val out = ArrayList<StreamVideo>()
-        for (e in embeds) {
+        for (e in embedCandidates(episode)) {
             runCatching { out += EmbedResolver.resolve(e) }
         }
         return out.distinctBy { it.url }
