@@ -160,13 +160,12 @@ class StreamDetailScreen(private val item: StreamItem) : Screen() {
         LaunchedEffect(pending) {
             if (pending != null) {
                 StreamStore.recordHistory(item, pending.episode)
-                navigator.push(
-                    StreamWebPlayerScreen(
-                        url = pending.url,
-                        title = if (item.isSeries) "${item.title} — ${pending.episode.name}" else item.title,
-                        referer = pending.referer,
-                    ),
-                )
+                val playTitle = if (item.isSeries) "${item.title} — ${pending.episode.name}" else item.title
+                if (pending.web) {
+                    navigator.push(StreamWebPlayerScreen(pending.url, playTitle, pending.referer))
+                } else {
+                    navigator.push(StreamPlayerScreen(pending.url, playTitle, HashMap(pending.headers)))
+                }
                 model.clearPending()
             }
         }
@@ -205,13 +204,18 @@ class StreamDetailScreenModel(private val item: StreamItem) :
         screenModelScope.launchIO {
             mutableState.update { it.copy(resolving = episode.url) }
             try {
-                val targets = source.playTargets(episode)
-                val target = targets.firstOrNull() ?: episode.url
-                // Referer = the page that embeds the player (what referer-gated hosts expect).
-                val referer = if (target == episode.url) source.baseUrl else episode.url
-                mutableState.update {
-                    it.copy(resolving = null, pending = Pending(episode, target, referer))
+                // Prefer a direct media URL (MP4) → in-app VideoView with its required headers.
+                val videos = source.videos(episode)
+                val direct = videos.firstOrNull { !it.isHls } ?: videos.firstOrNull()
+                val pending = if (direct != null) {
+                    Pending(episode, direct.url, web = false, referer = "", headers = direct.headers)
+                } else {
+                    // No direct media → load the host's web player in a WebView.
+                    val target = source.playTargets(episode).firstOrNull() ?: episode.url
+                    val referer = if (target == episode.url) source.baseUrl else episode.url
+                    Pending(episode, target, web = true, referer = referer, headers = emptyMap())
                 }
+                mutableState.update { it.copy(resolving = null, pending = pending) }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Throwable) {
@@ -225,7 +229,13 @@ class StreamDetailScreenModel(private val item: StreamItem) :
 
     fun clearResolveError() = mutableState.update { it.copy(resolveError = null) }
 
-    data class Pending(val episode: StreamEpisode, val url: String, val referer: String)
+    data class Pending(
+        val episode: StreamEpisode,
+        val url: String,
+        val web: Boolean,
+        val referer: String,
+        val headers: Map<String, String>,
+    )
 
     data class State(
         val loading: Boolean = true,

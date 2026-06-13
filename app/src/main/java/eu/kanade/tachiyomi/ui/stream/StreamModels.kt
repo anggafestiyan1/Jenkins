@@ -7,10 +7,12 @@ import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.FormBody
 import okhttp3.Request
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.select.Elements
 import tachiyomi.core.common.util.lang.withIOContext
 import uy.kohesive.injekt.injectLazy
+import java.net.URLEncoder
 
 /** A movie/series entry from a streaming source. */
 data class StreamItem(
@@ -53,16 +55,16 @@ interface StreamSource {
     suspend fun search(query: String, page: Int): List<StreamItem>
     suspend fun detail(item: StreamItem): StreamDetail
 
-    /** Candidate web-player/embed page URLs to load in the WebView for streaming. */
-    suspend fun playTargets(episode: StreamEpisode): List<String>
-
-    /** Resolved direct media URLs for offline download (best-effort, MP4 only is downloadable). */
+    /** Direct/playable video sources. MP4 → playable in VideoView + downloadable. */
     suspend fun videos(episode: StreamEpisode): List<StreamVideo>
+
+    /** Embed/watch-page URLs to load in the WebView when [videos] can't resolve direct media. */
+    suspend fun playTargets(episode: StreamEpisode): List<String>
 }
 
 /** Registry of the built-in streaming sources the user can switch between. */
 object StreamSources {
-    val all: List<StreamSource> by lazy { listOf(Lk21Source, RebahinSource) }
+    val all: List<StreamSource> by lazy { listOf(RebahinSource, Lk21Source) }
     fun byId(id: String?): StreamSource = all.firstOrNull { it.id == id } ?: all.first()
 }
 
@@ -80,11 +82,12 @@ object StreamPrefs {
 }
 
 /**
- * Shared HTML-scraping base. Concrete sources only provide URLs + list selector; detail/videos
- * extraction is generic (synopsis + iframe/embed collection) so it survives minor theme changes.
- * Selectors are best-effort and may need tuning per live site.
+ * Unified scraper for the modern Next.js movie/series aggregators (verified against the live site:
+ * cards link to /movies/<slug> & /tv/<slug>, the page __NEXT_DATA__ carries a "playbackUrl" direct
+ * MP4 that needs a Referer). Falls back to a generic DooPlay/embed path so a classic WordPress
+ * mirror set via the domain editor still has a chance.
  */
-abstract class BaseStreamSource : StreamSource {
+abstract class StreamSiteSource : StreamSource {
 
     protected abstract val defaultBaseUrl: String
 
@@ -92,23 +95,138 @@ abstract class BaseStreamSource : StreamSource {
         get() = StreamPrefs.baseUrl(id, defaultBaseUrl)
         set(value) = StreamPrefs.setBaseUrl(id, value)
 
-    protected suspend fun doc(url: String): Document = withIOContext {
+    private suspend fun doc(url: String): Document = withIOContext {
         StreamHttp.client.newCall(GET(url)).awaitSuccess().asJsoup()
     }
 
-    /** Containers that each wrap one result card. Override per source. */
-    protected open fun listSelector(): String =
-        "div.search-item, article.mega-item, div.item-article, div.ml-item, div.grid-item, article"
+    private suspend fun text(url: String): String = withIOContext {
+        StreamHttp.client.newCall(GET(url)).awaitSuccess().body.string()
+    }
 
-    protected open fun episodeSelector(): String =
-        "#seasons .episodios li a, .episodios li a, div.episode-list a, .serie a, #episode a, " +
+    private fun abs(href: String): String =
+        if (href.startsWith("http")) href else baseUrl.trimEnd('/') + "/" + href.trimStart('/')
+
+    private fun unescape(s: String): String =
+        s.replace("\\\"", "\"").replace("\\/", "/").replace("\\u0026", "&")
+
+    private fun refererHeaders() = mapOf("Referer" to "$baseUrl/")
+
+    // ---------------- Listing ----------------
+
+    override suspend fun popular(page: Int): List<StreamItem> {
+        if (page > 1) return emptyList()
+        val d = doc("$baseUrl/movies")
+        return parseNextCards(d).ifEmpty { parseGenericCards(d) }
+    }
+
+    override suspend fun search(query: String, page: Int): List<StreamItem> {
+        if (page > 1) return emptyList()
+        val q = URLEncoder.encode(query, "UTF-8")
+        val d1 = runCatching { doc("$baseUrl/search?q=$q") }.getOrNull()
+        val r1 = d1?.let { parseNextCards(it).ifEmpty { parseGenericCards(it) } }.orEmpty()
+        if (r1.isNotEmpty()) return r1
+        val d2 = runCatching { doc("$baseUrl/?s=$q") }.getOrNull() ?: return emptyList()
+        return parseNextCards(d2).ifEmpty { parseGenericCards(d2) }
+    }
+
+    private val detailSlug = Regex("^/(movies|tv)/[a-z0-9-]+$")
+
+    /** Next.js cards: <a href="/movies/slug"><img alt="Title" src="...tmdb..."></a> */
+    private fun parseNextCards(d: Document): List<StreamItem> {
+        return d.select("a[href*=\"/movies/\"], a[href*=\"/tv/\"]").mapNotNull { a ->
+            val raw = a.attr("href")
+            val path = raw.removePrefix(baseUrl).substringBefore("?").substringBefore("#")
+            if (!detailSlug.matches(path)) return@mapNotNull null
+            val img = a.selectFirst("img") ?: return@mapNotNull null
+            val title = img.attr("alt").trim()
+            if (title.isBlank()) return@mapNotNull null
+            val poster = img.absUrl("src").ifBlank { img.attr("src") }
+            StreamItem(
+                sourceId = id,
+                url = abs(raw),
+                title = title,
+                posterUrl = poster,
+                isSeries = path.startsWith("/tv/"),
+            )
+        }.distinctBy { it.url }
+    }
+
+    // ---------------- Detail ----------------
+
+    override suspend fun detail(item: StreamItem): StreamDetail {
+        val raw = text(item.url)
+        val html = unescape(raw)
+        val synopsis = Regex(""""(?:description|overview|synopsis)"\s*:\s*"([^"]{0,800})"""")
+            .find(html)?.groupValues?.get(1)?.trim().orEmpty()
+        val isNext = html.contains("playbackUrl")
+        val d = Jsoup.parse(raw, item.url)
+
+        val episodes = when {
+            item.isSeries -> {
+                val eps = d.select("a[href*=\"/season-\"]").mapNotNull { a ->
+                    val href = a.attr("href")
+                    if (!href.contains("/episode-")) return@mapNotNull null
+                    StreamEpisode(name = a.text().ifBlank { "Episode" }.trim(), url = abs(href))
+                }.distinctBy { it.url }
+                eps.ifEmpty { parseGenericEpisodes(d) }
+            }
+            isNext -> listOf(StreamEpisode(name = "Tonton", url = item.url))
+            else -> parseGenericEpisodes(d).ifEmpty { listOf(StreamEpisode(name = "Tonton", url = item.url)) }
+        }
+        return StreamDetail(synopsis = synopsis, episodes = episodes)
+    }
+
+    private fun parseGenericEpisodes(d: Document): List<StreamEpisode> {
+        val sel = "#seasons .episodios li a, .episodios li a, div.episode-list a, .serie a, " +
             ".eps a, .ep-item a, .eplister a, .les-content a"
+        return d.select(sel).mapNotNull { a ->
+            val href = a.absUrl("href").ifBlank { return@mapNotNull null }
+            StreamEpisode(name = a.text().ifBlank { "Episode" }.trim(), url = href)
+        }.distinctBy { it.url }.reversed()
+    }
 
-    protected fun parseCards(doc: Document): List<StreamItem> {
-        val byContainer = extract(doc.select(listSelector()))
+    // ---------------- Videos ----------------
+
+    override suspend fun videos(episode: StreamEpisode): List<StreamVideo> {
+        val html = unescape(text(episode.url))
+        val ref = refererHeaders()
+
+        // Next.js: paired "label":"...","playbackUrl":"...mp4"
+        val pairs = Regex(""""label"\s*:\s*"([^"]+)"\s*,\s*"playbackUrl"\s*:\s*"([^"]+)"""")
+            .findAll(html).toList()
+        val direct = if (pairs.isNotEmpty()) {
+            pairs.map {
+                val u = it.groupValues[2].trim()
+                StreamVideo(it.groupValues[1].trim(), u, u.contains(".m3u8"), ref)
+            }
+        } else {
+            Regex(""""playbackUrl"\s*:\s*"([^"]+)"""").findAll(html).mapIndexed { i, m ->
+                val u = m.groupValues[1].trim()
+                StreamVideo("Server ${i + 1}", u, u.contains(".m3u8"), ref)
+            }.toList()
+        }
+        if (direct.isNotEmpty()) return direct.distinctBy { it.url }
+
+        // Fallback: DooPlay AJAX / embed hosts.
+        val out = ArrayList<StreamVideo>()
+        for (e in embedCandidates(episode)) {
+            runCatching { out += EmbedResolver.resolve(e) }
+        }
+        return out.distinctBy { it.url }
+    }
+
+    override suspend fun playTargets(episode: StreamEpisode): List<String> {
+        return embedCandidates(episode).ifEmpty { listOf(episode.url) }
+    }
+
+    // ---------------- Generic DooPlay / embed fallback ----------------
+
+    private fun parseGenericCards(d: Document): List<StreamItem> {
+        val byContainer = extract(
+            d.select("div.search-item, article.mega-item, div.item-article, div.ml-item, div.grid-item, article"),
+        )
         if (byContainer.isNotEmpty()) return byContainer
-        // Fallback: generic — any anchor that wraps a poster image (resilient to theme changes).
-        return extract(doc.select("a:has(img)"))
+        return extract(d.select("a:has(img)"))
     }
 
     private fun extract(elements: Elements): List<StreamItem> {
@@ -117,7 +235,6 @@ abstract class BaseStreamSource : StreamSource {
             val a = if (el.tagName() == "a") el else el.selectFirst("a[href]") ?: return@mapNotNull null
             val href = a.absUrl("href").ifBlank { a.attr("href") }
             if (href.isBlank() || !href.startsWith("http") || !seen.add(href)) return@mapNotNull null
-            // Skip obvious navigation/taxonomy links.
             if (href.contains("/genre") || href.contains("/country") || href.contains("/year") ||
                 href.contains("/networks") || href.contains("javascript") || href.endsWith("#")
             ) {
@@ -132,41 +249,14 @@ abstract class BaseStreamSource : StreamSource {
                     ?: a.attr("title").ifBlank { img?.attr("alt").orEmpty() }
                 ).trim()
             if (title.isBlank() || poster.isBlank()) return@mapNotNull null
-            StreamItem(
-                sourceId = id,
-                url = href,
-                title = title,
-                posterUrl = poster,
-                isSeries = href.contains("series", true) || href.contains("/tv", true),
-            )
+            StreamItem(id, href, title, poster, isSeries = href.contains("series", true) || href.contains("/tv", true))
         }
     }
 
-    override suspend fun detail(item: StreamItem): StreamDetail {
-        val d = doc(item.url)
-        val synopsis = d.selectFirst(
-            "div[itemprop=description], .entry-content p, .desc, .description, blockquote",
-        )?.text().orEmpty()
-
-        val epLinks = d.select(episodeSelector())
-        val episodes = if (epLinks.isNotEmpty()) {
-            epLinks.mapNotNull { a ->
-                val href = a.absUrl("href").ifBlank { return@mapNotNull null }
-                StreamEpisode(name = a.text().ifBlank { "Episode" }, url = href)
-            }.reversed()
-        } else {
-            // Movie: the player lives on the detail page itself (DooPlay-style server tabs/iframes);
-            // following the on-page "Nonton" button tends to hit promo/interstitial redirects.
-            listOf(StreamEpisode(name = "Tonton", url = item.url))
-        }
-        return StreamDetail(synopsis = synopsis, episodes = episodes)
-    }
-
-    /** Hints that a URL is a video host/embed (not an ad or page chrome). */
     private val hostHints = listOf(
         "dood", "d000d", "dooood", "mixdrop", "filemoon", "streamtape", "vidhide", "streamwish",
         "vidguard", "mp4upload", "filelions", "streamhub", "wibufile", "abysscdn", "pixeldrain",
-        "/embed", "/e/", "player", ".m3u8", ".mp4", "gdriveplayer", "hxfile", "lbx",
+        "/embed", "/e/", "player", ".m3u8", ".mp4",
     )
 
     private fun looksLikeEmbed(url: String) = hostHints.any { url.contains(it, ignoreCase = true) }
@@ -176,10 +266,6 @@ abstract class BaseStreamSource : StreamSource {
         if (decoded.startsWith("http")) decoded.trim() else null
     }.getOrNull()
 
-    /**
-     * DooPlay theme (LK21/Rebahin): the player "server" tabs load their iframe via an AJAX call to
-     * wp-admin/admin-ajax.php — the iframe is NOT in the static HTML. Resolve each option here.
-     */
     private suspend fun dooplayEmbeds(d: Document, pageUrl: String): List<String> {
         val options = d.select("li.dooplay_player_option, .dooplay_player_option, #playeroptionsul li[data-post]")
         if (options.isEmpty()) return emptyList()
@@ -191,10 +277,7 @@ abstract class BaseStreamSource : StreamSource {
             val type = li.attr("data-type").ifBlank { "movie" }
             runCatching {
                 val body = FormBody.Builder()
-                    .add("action", "doo_player_ajax")
-                    .add("post", post)
-                    .add("nume", nume)
-                    .add("type", type)
+                    .add("action", "doo_player_ajax").add("post", post).add("nume", nume).add("type", type)
                     .build()
                 val req = Request.Builder()
                     .url("$baseUrl/wp-admin/admin-ajax.php")
@@ -210,23 +293,20 @@ abstract class BaseStreamSource : StreamSource {
     }
 
     private fun extractEmbedUrl(json: String): String? {
-        val raw = Regex(""""embed_url"\s*:\s*"((?:[^"\\]|\\.)*)"""").find(json)?.groupValues?.get(1)
+        val rawUrl = Regex(""""embed_url"\s*:\s*"((?:[^"\\]|\\.)*)"""").find(json)?.groupValues?.get(1)
             ?: return null
-        val unescaped = raw.replace("\\/", "/").replace("\\\"", "\"").replace("\\u0026", "&")
-        return if (unescaped.contains("<iframe", ignoreCase = true)) {
-            Regex("""src=["']([^"']+)["']""").find(unescaped)?.groupValues?.get(1)
+        val u = rawUrl.replace("\\/", "/").replace("\\\"", "\"").replace("\\u0026", "&")
+        return if (u.contains("<iframe", ignoreCase = true)) {
+            Regex("""src=["']([^"']+)["']""").find(u)?.groupValues?.get(1)
         } else {
-            unescaped.takeIf { it.startsWith("http") }
+            u.takeIf { it.startsWith("http") }
         }
     }
 
-    /** Collects every plausible embed/player URL from a watch page (DooPlay AJAX, lazy attrs, base64). */
-    protected open suspend fun embedCandidates(episode: StreamEpisode): List<String> {
+    private suspend fun embedCandidates(episode: StreamEpisode): List<String> {
         val d = doc(episode.url)
         val html = d.html()
         val urls = LinkedHashSet<String>()
-
-        // DooPlay AJAX servers — the real, reliable embeds. Kept first (highest priority).
         val dooplay = dooplayEmbeds(d, episode.url)
 
         val attrs = listOf(
@@ -244,38 +324,15 @@ abstract class BaseStreamSource : StreamSource {
                     }
                 }
             }
-
-        // <iframe src> that Jsoup may have left inside scripts/comments.
         Regex("""<iframe[^>]+src=["']([^"']+)["']""", RegexOption.IGNORE_CASE).findAll(html).forEach {
             var u = it.groupValues[1]
             if (u.startsWith("//")) u = "https:$u"
             if (u.startsWith("http")) urls.add(u)
         }
-        // Any bare URL that looks like a video host.
         Regex("""https?://[^\s"'<>\\)]+""").findAll(html).forEach {
             val u = it.value.replace("\\/", "/")
             if (looksLikeEmbed(u)) urls.add(u)
         }
-        // Long base64 blobs in scripts that decode to a URL.
-        Regex("""[A-Za-z0-9+/]{40,}={0,2}""").findAll(html).forEach { m ->
-            decodeBase64Url(m.value)?.let { if (it.startsWith("http")) urls.add(it) }
-        }
-
-        // DooPlay embeds first (most reliable), then embed-looking URLs, then the rest.
         return (dooplay + urls.sortedByDescending { looksLikeEmbed(it) }).distinct()
-    }
-
-    override suspend fun playTargets(episode: StreamEpisode): List<String> {
-        val candidates = embedCandidates(episode)
-        // If nothing embed-like was found, fall back to the watch page itself (WebView still plays it).
-        return candidates.ifEmpty { listOf(episode.url) }
-    }
-
-    override suspend fun videos(episode: StreamEpisode): List<StreamVideo> {
-        val out = ArrayList<StreamVideo>()
-        for (e in embedCandidates(episode)) {
-            runCatching { out += EmbedResolver.resolve(e) }
-        }
-        return out.distinctBy { it.url }
     }
 }
