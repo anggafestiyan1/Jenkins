@@ -143,7 +143,9 @@ object YtDownloadQueue {
 
         // Always download fresh to avoid leftover partial files being treated as complete.
         dir.findFile(fileName)?.delete()
-        val target = dir.createFile(fileName) ?: throw IllegalStateException("Gagal membuat file ($fileName)")
+        val target = dir.createFile(fileName) ?: throw IllegalStateException(
+            "Gagal membuat file. base=${baseDir.uri} dirExists=${dir.exists()} isDir=${dir.isDirectory} canWrite=${dir.canWrite()}",
+        )
         val ok = download(stream.streamUrl, target, item.id)
         if (!ok) {
             target.delete()
