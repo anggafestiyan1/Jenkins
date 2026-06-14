@@ -36,6 +36,27 @@ object StreamHttp {
             .hostnameVerifier { _, _ -> true }
             .followRedirects(true)
             .followSslRedirects(true)
+            // Browser-like headers so Cloudflare's Browser Integrity Check lets the request through
+            // (some mirrors, e.g. JagoDrama/Drakorid, reject bare OkHttp requests otherwise).
+            .addInterceptor { chain ->
+                val req = chain.request()
+                val b = req.newBuilder()
+                if (req.header("Accept") == null) {
+                    b.header(
+                        "Accept",
+                        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                    )
+                }
+                if (req.header("Accept-Language") == null) {
+                    b.header("Accept-Language", "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7")
+                }
+                b.header("Sec-Fetch-Dest", "document")
+                b.header("Sec-Fetch-Mode", "navigate")
+                b.header("Sec-Fetch-Site", "none")
+                b.header("Sec-Fetch-User", "?1")
+                b.header("Upgrade-Insecure-Requests", "1")
+                chain.proceed(b.build())
+            }
             .build()
     }
 
