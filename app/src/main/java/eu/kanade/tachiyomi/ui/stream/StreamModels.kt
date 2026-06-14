@@ -65,7 +65,7 @@ interface StreamSource {
 
 /** Registry of the built-in streaming sources the user can switch between. */
 object StreamSources {
-    val all: List<StreamSource> by lazy { listOf(RebahinSource, Lk21Source) }
+    val all: List<StreamSource> by lazy { listOf(RebahinSource, Lk21Source, DrakoridSource) }
     fun byId(id: String?): StreamSource = all.firstOrNull { it.id == id } ?: all.first()
 }
 
