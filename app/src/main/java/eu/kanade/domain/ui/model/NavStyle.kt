@@ -10,6 +10,7 @@ import dev.icerock.moko.resources.StringResource
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.browse.BrowseTab
+import eu.kanade.tachiyomi.ui.drama.DramaTab
 import eu.kanade.tachiyomi.ui.library.anime.AnimeLibraryTab
 import eu.kanade.tachiyomi.ui.library.manga.MangaLibraryTab
 import eu.kanade.tachiyomi.ui.novel.NovelTab
@@ -39,7 +40,9 @@ enum class NavStyle(
     val tabs: List<Tab>
         get() {
             // Film (AnimeLibraryTab) is folded into StreamTab's header toggle; More lives in Browse.
+            // Drama (micro-drama) takes the freed leftmost slot; Stream stays far right.
             return mutableListOf(
+                DramaTab,
                 MangaLibraryTab,
                 NovelTab,
                 YouTubeTab,
