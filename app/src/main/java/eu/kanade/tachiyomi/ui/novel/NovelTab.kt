@@ -25,6 +25,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -64,6 +65,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import coil3.compose.AsyncImage
 import eu.kanade.presentation.util.Tab
+import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -83,6 +85,7 @@ data object NovelTab : Tab {
     override fun Content() {
         val pagerState = androidx.compose.foundation.pager.rememberPagerState { 5 }
         val scope = androidx.compose.runtime.rememberCoroutineScope()
+        val navigator = LocalNavigator.currentOrThrow
         val browseModel = rememberScreenModel { NovelBrowseScreenModel() }
         val titles = listOf(
             stringResource(AYMR.strings.label_recent),
@@ -95,7 +98,14 @@ data object NovelTab : Tab {
         Scaffold(
             topBar = {
                 Column {
-                    TopAppBar(title = { Text(stringResource(AYMR.strings.label_novel)) })
+                    TopAppBar(
+                        title = { Text(stringResource(AYMR.strings.label_novel)) },
+                        actions = {
+                            IconButton(onClick = { navigator.push(SettingsScreen()) }) {
+                                Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+                            }
+                        },
+                    )
                     TabRow(selectedTabIndex = pagerState.currentPage) {
                         titles.forEachIndexed { index, title ->
                             Tab(

@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SmartDisplay
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -65,6 +66,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import coil3.compose.AsyncImage
 import eu.kanade.presentation.util.Tab
+import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -87,13 +89,21 @@ data object YouTubeTab : Tab {
     override fun Content() {
         val pagerState = rememberPagerState { 3 }
         val scope = rememberCoroutineScope()
+        val navigator = LocalNavigator.currentOrThrow
         val titles = listOf("Search", "Offline", "Queue")
         val searchModel = rememberScreenModel { YouTubeSearchScreenModel() }
 
         Scaffold(
             topBar = {
                 Column {
-                    TopAppBar(title = { Text("YouTube") })
+                    TopAppBar(
+                        title = { Text("YouTube") },
+                        actions = {
+                            IconButton(onClick = { navigator.push(SettingsScreen()) }) {
+                                Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+                            }
+                        },
+                    )
                     TabRow(selectedTabIndex = pagerState.currentPage) {
                         titles.forEachIndexed { index, title ->
                             Tab(
