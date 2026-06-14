@@ -17,9 +17,12 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Theaters
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -27,6 +30,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,9 +42,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
@@ -72,9 +76,16 @@ data object DramaTab : Tab {
         val navigator = LocalNavigator.currentOrThrow
         val model = rememberScreenModel { DramaScreenModel() }
         val state by model.state.collectAsState()
-        var genre by remember { mutableStateOf("") }
 
-        LaunchedEffect(Unit) { model.load("") }
+        var activeSourceId by remember { mutableStateOf(DramaPrefs.activeSourceId()) }
+        var showSourceMenu by remember { mutableStateOf(false) }
+        var genre by remember { mutableStateOf("") }
+        val source = DramaSources.byId(activeSourceId)
+
+        LaunchedEffect(activeSourceId) {
+            genre = ""
+            model.load(source, "")
+        }
 
         Scaffold(
             topBar = {
@@ -82,21 +93,39 @@ data object DramaTab : Tab {
                     TopAppBar(
                         title = { Text("Drama Pendek") },
                         actions = {
+                            TextButton(onClick = { showSourceMenu = true }) {
+                                Text(source.name)
+                                Icon(Icons.Outlined.ArrowDropDown, contentDescription = "Ganti sumber")
+                            }
+                            DropdownMenu(expanded = showSourceMenu, onDismissRequest = { showSourceMenu = false }) {
+                                DramaSources.all.forEach { s ->
+                                    DropdownMenuItem(
+                                        text = { Text(s.name) },
+                                        onClick = {
+                                            activeSourceId = s.id
+                                            DramaPrefs.setActiveSourceId(s.id)
+                                            showSourceMenu = false
+                                        },
+                                    )
+                                }
+                            }
                             IconButton(onClick = { navigator.push(MoreScreen()) }) {
                                 Icon(Icons.Outlined.Settings, contentDescription = "More")
                             }
                         },
                     )
-                    Row(
-                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        DramaSource.GENRES.forEach { (label, slug) ->
-                            FilterChip(
-                                selected = genre == slug,
-                                onClick = { genre = slug; model.load(slug) },
-                                label = { Text(label) },
-                            )
+                    if (source.genres.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            source.genres.forEach { (label, slug) ->
+                                FilterChip(
+                                    selected = genre == slug,
+                                    onClick = { genre = slug; model.load(source, slug) },
+                                    label = { Text(label) },
+                                )
+                            }
                         }
                     }
                 }
@@ -142,11 +171,11 @@ data object DramaTab : Tab {
 
 class DramaScreenModel : StateScreenModel<DramaScreenModel.State>(State()) {
 
-    fun load(slug: String) {
+    fun load(source: DramaSource, slug: String) {
         screenModelScope.launchIO {
             mutableState.update { it.copy(loading = true, error = null) }
             try {
-                val items = DramaSource.byGenre(slug)
+                val items = source.byGenre(slug)
                 mutableState.update {
                     it.copy(loading = false, items = items, error = if (items.isEmpty()) "Kosong (cek koneksi/domain)." else null)
                 }

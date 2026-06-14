@@ -46,7 +46,6 @@ import eu.kanade.tachiyomi.ui.entries.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.library.anime.AnimeLibraryTab
 import eu.kanade.tachiyomi.ui.library.manga.MangaLibraryTab
 import eu.kanade.tachiyomi.ui.more.MoreTab
-import eu.kanade.tachiyomi.ui.stream.StreamTab
 import eu.kanade.tachiyomi.ui.updates.UpdatesTab
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
@@ -77,12 +76,11 @@ object HomeScreen : Screen() {
 
     private val uiPreferences: UiPreferences by injectLazy()
     private val hideLibraryTab = uiPreferences.hideLibraryTab().get()
+    // Default landing: Komik (which itself opens on its Recent tab). Film is folded into Stream,
+    // so never open straight to AnimeLibraryTab.
     private val defaultTab = uiPreferences.startScreen().get().tab.let {
         when {
-            // Film is no longer a bottom-nav tab (folded into Stream) — never open straight to it.
-            it == AnimeLibraryTab -> StreamTab
-            hideLibraryTab == HideLibraryTab.MANGA && it == MangaLibraryTab -> StreamTab
-            hideLibraryTab == HideLibraryTab.ANIME && it == AnimeLibraryTab -> MangaLibraryTab
+            it == AnimeLibraryTab -> MangaLibraryTab
             else -> it
         }
     }

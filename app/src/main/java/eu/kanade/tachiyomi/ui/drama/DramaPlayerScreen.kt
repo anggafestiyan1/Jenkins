@@ -168,7 +168,7 @@ class DramaPlayerScreenModel(private val item: DramaItem) :
     init {
         screenModelScope.launchIO {
             try {
-                val eps = DramaSource.episodes(item)
+                val eps = DramaSources.byId(item.sourceId).episodes(item)
                 mutableState.update {
                     it.copy(episodes = eps, error = if (eps.isEmpty()) "Tidak ada episode" else null)
                 }

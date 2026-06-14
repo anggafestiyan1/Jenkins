@@ -160,13 +160,8 @@ fun Screen.combinedHistoryTab(
                 }
             }
         },
-        actions = persistentListOf(
-            AppBar.Action(
-                title = stringResource(MR.strings.pref_clear_history),
-                icon = Icons.Outlined.DeleteSweep,
-                onClick = { screenModel.setDialog(CombinedHistoryScreenModel.Dialog.DeleteAll) },
-            ),
-        ),
+        // "Clear all history" (remove everything) intentionally removed.
+        actions = persistentListOf(),
         navigateUp = navigateUp,
     )
 }

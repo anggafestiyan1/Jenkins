@@ -76,6 +76,12 @@ class MoreScreen : Screen() {
                 onDownloadedOnlyChange = { screenModel.downloadedOnly = it },
                 incognitoMode = screenModel.incognitoMode,
                 onIncognitoModeChange = { screenModel.incognitoMode = it },
+                offlineMode = screenModel.offlineMode,
+                onOfflineModeChange = {
+                    screenModel.offlineMode = it
+                    // Offline mode also forces "downloaded only" so the library stays usable offline.
+                    screenModel.downloadedOnly = it
+                },
                 onClickDownloadQueue = { navigator.push(DownloadsTab) },
                 onClickQuickBackup = {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q ||

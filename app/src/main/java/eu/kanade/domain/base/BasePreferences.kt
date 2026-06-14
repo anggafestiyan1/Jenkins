@@ -20,6 +20,9 @@ class BasePreferences(
 
     fun incognitoMode() = preferenceStore.getBoolean(Preference.appStateKey("incognito_mode"), false)
 
+    /** Offline mode: prefer downloaded/saved content, avoid using mobile data for browsing. */
+    fun offlineMode() = preferenceStore.getBoolean(Preference.appStateKey("offline_mode"), false)
+
     fun extensionInstaller() = ExtensionInstallerPreference(context, preferenceStore)
 
     fun deviceHasPip() = context.packageManager.hasSystemFeature(

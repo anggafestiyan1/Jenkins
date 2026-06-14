@@ -3,6 +3,7 @@ package eu.kanade.presentation.more
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AirplanemodeActive
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Extension
@@ -85,6 +86,8 @@ fun MoreScreenContent(
     onClickRestore: () -> Unit,
     onClickSettings: () -> Unit,
     onClickAbout: () -> Unit,
+    offlineMode: Boolean = false,
+    onOfflineModeChange: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -102,6 +105,15 @@ fun MoreScreenContent(
                 icon = Icons.Outlined.CloudOff,
                 checked = downloadedOnly,
                 onCheckedChanged = onDownloadedOnlyChange,
+            )
+        }
+        item {
+            SwitchPreferenceWidget(
+                title = "Mode offline",
+                subtitle = "Akses tanpa kuota — pakai konten tersimpan saja",
+                icon = Icons.Outlined.AirplanemodeActive,
+                checked = offlineMode,
+                onCheckedChanged = onOfflineModeChange,
             )
         }
         item {

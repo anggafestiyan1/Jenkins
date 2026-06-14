@@ -70,6 +70,8 @@ data object MangaLibraryTab : Tab {
 
         TabbedScreen(
             titleRes = AYMR.strings.label_komik_library,
+            // Open on the Recent tab (index 2) by default.
+            state = androidx.compose.foundation.pager.rememberPagerState(initialPage = 2) { 5 },
             tabs = persistentListOf(
                 // index 0: Library (no search)
                 mangaFavoriteInnerTab(),
