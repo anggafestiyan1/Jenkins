@@ -44,6 +44,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -87,7 +88,7 @@ import eu.kanade.tachiyomi.ui.history.combined.CombinedHistoryScreenModel
 import eu.kanade.tachiyomi.ui.history.combined.combinedHistoryTab
 import eu.kanade.tachiyomi.ui.library.anime.animeFavoriteInnerTab
 import eu.kanade.tachiyomi.ui.library.anime.animeUploadInnerTab
-import eu.kanade.tachiyomi.ui.setting.SettingsScreen
+import eu.kanade.tachiyomi.ui.more.MoreScreen
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.system.logcat
@@ -168,19 +169,19 @@ data object StreamTab : Tab {
                                     Icon(Icons.Outlined.Edit, contentDescription = "Edit domain")
                                 }
                             }
-                            IconButton(onClick = { navigator.push(SettingsScreen()) }) {
-                                Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+                            IconButton(onClick = { navigator.push(MoreScreen()) }) {
+                                Icon(Icons.Outlined.Settings, contentDescription = "More")
                             }
                         },
                     )
                     val pager = if (film) filmPager else streamPager
                     val titles = if (film) filmTabs.map { stringResource(it.titleRes) } else streamTitles
-                    TabRow(selectedTabIndex = pager.currentPage) {
+                    ScrollableTabRow(selectedTabIndex = pager.currentPage, edgePadding = 0.dp) {
                         titles.forEachIndexed { index, title ->
                             Tab(
                                 selected = pager.currentPage == index,
                                 onClick = { scope.launch { pager.animateScrollToPage(index) } },
-                                text = { Text(title) },
+                                text = { Text(title, maxLines = 1, softWrap = false) },
                             )
                         }
                     }

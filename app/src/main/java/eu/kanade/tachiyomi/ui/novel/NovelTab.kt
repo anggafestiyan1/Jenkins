@@ -66,7 +66,7 @@ import cafe.adriel.voyager.navigator.tab.TabOptions
 import coil3.compose.AsyncImage
 import eu.kanade.presentation.util.Tab
 import eu.kanade.presentation.util.scrollingTitle
-import eu.kanade.tachiyomi.ui.setting.SettingsScreen
+import eu.kanade.tachiyomi.ui.more.MoreScreen
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -102,8 +102,8 @@ data object NovelTab : Tab {
                     TopAppBar(
                         title = { Text(stringResource(AYMR.strings.label_novel)) },
                         actions = {
-                            IconButton(onClick = { navigator.push(SettingsScreen()) }) {
-                                Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+                            IconButton(onClick = { navigator.push(MoreScreen()) }) {
+                                Icon(Icons.Outlined.Settings, contentDescription = "More")
                             }
                         },
                     )

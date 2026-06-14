@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import eu.kanade.tachiyomi.ui.setting.SettingsScreen
+import eu.kanade.tachiyomi.ui.more.MoreScreen
 import dev.icerock.moko.resources.StringResource
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
@@ -85,8 +85,8 @@ fun TabbedScreen(
                     onChangeSearchQuery = actualOnChange,
                     actions = {
                         AppBarActions(tab.actions)
-                        IconButton(onClick = { navigator.push(SettingsScreen()) }) {
-                            Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+                        IconButton(onClick = { navigator.push(MoreScreen()) }) {
+                            Icon(Icons.Outlined.Settings, contentDescription = "More")
                         }
                     },
                     navigateUp = tab.navigateUp,

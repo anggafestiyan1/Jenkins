@@ -52,7 +52,19 @@ object DramaSource {
         StreamHttp.client.newCall(GET(url)).awaitSuccess().body.string()
     }
 
-    suspend fun popular(): List<DramaItem> = parseCards(doc("$BASE/"))
+    /**
+     * "Semua": the full catalog sits behind a protected API (403), and pages don't paginate, so we
+     * merge every server-rendered listing (homepage + collections + each genre) for the widest set.
+     */
+    suspend fun popular(): List<DramaItem> {
+        val urls = listOf("$BASE/", "$BASE/collections") +
+            GENRES.mapNotNull { (_, slug) -> slug.takeIf { it.isNotBlank() }?.let { "$BASE/genre/$it" } }
+        val merged = LinkedHashMap<String, DramaItem>()
+        for (u in urls) {
+            runCatching { parseCards(doc(u)) }.getOrNull()?.forEach { merged.putIfAbsent(it.url, it) }
+        }
+        return merged.values.toList()
+    }
 
     suspend fun byGenre(slug: String): List<DramaItem> =
         if (slug.isBlank()) popular() else parseCards(doc("$BASE/genre/$slug"))

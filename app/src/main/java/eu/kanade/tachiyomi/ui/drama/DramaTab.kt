@@ -50,7 +50,7 @@ import cafe.adriel.voyager.navigator.tab.TabOptions
 import coil3.compose.AsyncImage
 import eu.kanade.presentation.util.Tab
 import eu.kanade.presentation.util.scrollingTitle
-import eu.kanade.tachiyomi.ui.setting.SettingsScreen
+import eu.kanade.tachiyomi.ui.more.MoreScreen
 import kotlinx.coroutines.flow.update
 import logcat.LogPriority
 import tachiyomi.core.common.util.lang.launchIO
@@ -82,8 +82,8 @@ data object DramaTab : Tab {
                     TopAppBar(
                         title = { Text("Drama Pendek") },
                         actions = {
-                            IconButton(onClick = { navigator.push(SettingsScreen()) }) {
-                                Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+                            IconButton(onClick = { navigator.push(MoreScreen()) }) {
+                                Icon(Icons.Outlined.Settings, contentDescription = "More")
                             }
                         },
                     )

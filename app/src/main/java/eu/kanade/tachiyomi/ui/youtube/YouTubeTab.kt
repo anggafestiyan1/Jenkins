@@ -67,7 +67,7 @@ import cafe.adriel.voyager.navigator.tab.TabOptions
 import coil3.compose.AsyncImage
 import eu.kanade.presentation.util.Tab
 import eu.kanade.presentation.util.scrollingTitle
-import eu.kanade.tachiyomi.ui.setting.SettingsScreen
+import eu.kanade.tachiyomi.ui.more.MoreScreen
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -100,8 +100,8 @@ data object YouTubeTab : Tab {
                     TopAppBar(
                         title = { Text("YouTube") },
                         actions = {
-                            IconButton(onClick = { navigator.push(SettingsScreen()) }) {
-                                Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+                            IconButton(onClick = { navigator.push(MoreScreen()) }) {
+                                Icon(Icons.Outlined.Settings, contentDescription = "More")
                             }
                         },
                     )

@@ -88,6 +88,7 @@ data object MangaLibraryTab : Tab {
             onChangeMangaSearchQuery = downloadsScreenModel::search,
             animeSearchQuery = historySearchQuery,
             onChangeAnimeSearchQuery = historyScreenModel::search,
+            scrollable = true,
         )
 
         LaunchedEffect(Unit) {
