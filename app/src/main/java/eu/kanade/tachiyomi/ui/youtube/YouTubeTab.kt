@@ -66,6 +66,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import coil3.compose.AsyncImage
 import eu.kanade.presentation.util.Tab
+import eu.kanade.presentation.util.scrollingTitle
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.flow.update
@@ -178,8 +179,9 @@ private fun SearchContent(model: YouTubeSearchScreenModel) {
                                 Text(
                                     item.title,
                                     style = MaterialTheme.typography.bodyMedium,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.scrollingTitle(),
                                 )
                                 Text(
                                     text = "${item.uploader} • ${formatDuration(item.durationSeconds)}",
@@ -232,9 +234,9 @@ private fun OfflineContent(active: Boolean) {
                     Text(
                         offline.title,
                         style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.weight(1f).scrollingTitle(),
                     )
                     IconButton(onClick = {
                         YtStore.delete(offline.id)
@@ -284,7 +286,8 @@ private fun QueueContent() {
                                 item.title,
                                 style = MaterialTheme.typography.bodyMedium,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false,
+                                modifier = Modifier.scrollingTitle(),
                             )
                             Spacer(Modifier.height(4.dp))
                             if (item.status == YtDownloadQueue.Status.ERROR) {

@@ -74,6 +74,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import coil3.compose.AsyncImage
 import eu.kanade.presentation.util.Tab
+import eu.kanade.presentation.util.scrollingTitle
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -490,7 +491,8 @@ private fun QueueContent() {
                                 item.title,
                                 style = MaterialTheme.typography.bodyMedium,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false,
+                                modifier = Modifier.scrollingTitle(),
                             )
                             Spacer(Modifier.height(4.dp))
                             if (item.status == StreamDownloadQueue.Status.ERROR) {
@@ -541,9 +543,15 @@ private fun PosterRow(
         )
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.scrollingTitle(),
+            )
             if (subtitle.isNotBlank()) {
-                Text(subtitle, style = MaterialTheme.typography.bodySmall)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, maxLines = 1, softWrap = false)
             }
         }
         if (trailing != null) trailing()

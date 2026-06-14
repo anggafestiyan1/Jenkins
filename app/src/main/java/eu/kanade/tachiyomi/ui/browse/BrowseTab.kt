@@ -17,7 +17,6 @@ import eu.kanade.presentation.components.TabbedScreen
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.browse.manga.extension.MangaExtensionsScreenModel
-import eu.kanade.tachiyomi.ui.browse.manga.extension.mangaExtensionsTab
 import eu.kanade.tachiyomi.ui.browse.manga.extension.mangaRecommendedTab
 import eu.kanade.tachiyomi.ui.browse.manga.migration.sources.migrateMangaSourceTab
 import eu.kanade.tachiyomi.ui.browse.manga.source.globalsearch.GlobalMangaSearchScreen
@@ -67,7 +66,6 @@ data object BrowseTab : Tab {
         val tabs = persistentListOf(
             mangaSourcesTab(),
             mangaRecommendedTab(),
-            mangaExtensionsTab(mangaExtensionsScreenModel),
             migrateMangaSourceTab(),
             moreTab(),
         )

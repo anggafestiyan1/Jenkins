@@ -65,6 +65,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import coil3.compose.AsyncImage
 import eu.kanade.presentation.util.Tab
+import eu.kanade.presentation.util.scrollingTitle
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.aniyomi.AYMR
@@ -263,8 +264,8 @@ private fun NovelHistoryContent(active: Boolean) {
                     )
                     Spacer(Modifier.width(12.dp))
                     Column {
-                        Text(entry.novel.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(entry.lastChapterName, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(entry.novel.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, softWrap = false, modifier = Modifier.scrollingTitle())
+                        Text(entry.lastChapterName, style = MaterialTheme.typography.bodySmall, maxLines = 1, softWrap = false, modifier = Modifier.scrollingTitle())
                     }
                 }
             }
@@ -331,7 +332,8 @@ private fun NovelQueueContent() {
                                 item.title,
                                 style = MaterialTheme.typography.bodyLarge,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false,
+                                modifier = Modifier.scrollingTitle(),
                             )
                             Spacer(Modifier.height(4.dp))
                             LinearProgressIndicator(
