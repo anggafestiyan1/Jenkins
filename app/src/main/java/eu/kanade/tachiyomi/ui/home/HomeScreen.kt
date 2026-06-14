@@ -46,6 +46,7 @@ import eu.kanade.tachiyomi.ui.entries.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.library.anime.AnimeLibraryTab
 import eu.kanade.tachiyomi.ui.library.manga.MangaLibraryTab
 import eu.kanade.tachiyomi.ui.more.MoreTab
+import eu.kanade.tachiyomi.ui.stream.StreamTab
 import eu.kanade.tachiyomi.ui.updates.UpdatesTab
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
@@ -78,7 +79,9 @@ object HomeScreen : Screen() {
     private val hideLibraryTab = uiPreferences.hideLibraryTab().get()
     private val defaultTab = uiPreferences.startScreen().get().tab.let {
         when {
-            hideLibraryTab == HideLibraryTab.MANGA && it == MangaLibraryTab -> AnimeLibraryTab
+            // Film is no longer a bottom-nav tab (folded into Stream) — never open straight to it.
+            it == AnimeLibraryTab -> StreamTab
+            hideLibraryTab == HideLibraryTab.MANGA && it == MangaLibraryTab -> StreamTab
             hideLibraryTab == HideLibraryTab.ANIME && it == AnimeLibraryTab -> MangaLibraryTab
             else -> it
         }

@@ -75,8 +75,20 @@ import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import logcat.LogPriority
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import eu.kanade.tachiyomi.ui.history.combined.CombinedHistoryScreenModel
+import eu.kanade.tachiyomi.ui.history.combined.combinedHistoryTab
+import eu.kanade.tachiyomi.ui.library.anime.animeFavoriteInnerTab
+import eu.kanade.tachiyomi.ui.library.anime.animeUploadInnerTab
+import eu.kanade.tachiyomi.ui.setting.SettingsScreen
+import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.i18n.aniyomi.AYMR
+import tachiyomi.presentation.core.i18n.stringResource
 
 data object StreamTab : Tab {
 
@@ -91,10 +103,14 @@ data object StreamTab : Tab {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
-        val pagerState = rememberPagerState { 5 }
         val scope = rememberCoroutineScope()
-        val titles = listOf("Stream", "Favorite", "History", "Offline", "Queue")
+        val navigator = LocalNavigator.currentOrThrow
+        val context = LocalContext.current
+        var film by remember { mutableStateOf(false) }
 
+        // Stream state
+        val streamPager = rememberPagerState { 5 }
+        val streamTitles = listOf("Stream", "Favorite", "History", "Offline", "Queue")
         var activeSourceId by remember { mutableStateOf(StreamPrefs.activeSourceId()) }
         var showSourceMenu by remember { mutableStateOf(false) }
         var showDomainDialog by remember { mutableStateOf(false) }
@@ -102,39 +118,64 @@ data object StreamTab : Tab {
         val source = StreamSources.byId(activeSourceId)
         val searchModel = rememberScreenModel { StreamSearchScreenModel() }
 
+        // Film state — reuses the local video library tabs (Saved / Upload / Recent)
+        val filmHistoryModel = rememberScreenModel { CombinedHistoryScreenModel() }
+        LaunchedEffect(Unit) { filmHistoryModel.setFilter(CombinedHistoryScreenModel.Filter.Anime) }
+        val filmTabs = persistentListOf(
+            animeFavoriteInnerTab().copy(titleRes = AYMR.strings.label_saved),
+            animeUploadInnerTab(),
+            combinedHistoryTab(context, fromMore = false, screenModel = filmHistoryModel)
+                .copy(titleRes = AYMR.strings.label_recent),
+        )
+        val filmPager = rememberPagerState { filmTabs.size }
+        val snackbarHostState = remember { SnackbarHostState() }
+
         Scaffold(
             topBar = {
                 Column {
                     TopAppBar(
-                        title = { Text("Stream") },
-                        actions = {
-                            TextButton(onClick = { showSourceMenu = true }) {
-                                Text(source.name)
-                                Icon(Icons.Outlined.ArrowDropDown, contentDescription = "Ganti sumber")
+                        title = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                ModeTab("Stream", selected = !film) { film = false }
+                                Spacer(Modifier.width(16.dp))
+                                ModeTab("Film", selected = film) { film = true }
                             }
-                            DropdownMenu(expanded = showSourceMenu, onDismissRequest = { showSourceMenu = false }) {
-                                StreamSources.all.forEach { s ->
-                                    DropdownMenuItem(
-                                        text = { Text(s.name) },
-                                        onClick = {
-                                            activeSourceId = s.id
-                                            StreamPrefs.setActiveSourceId(s.id)
-                                            showSourceMenu = false
-                                            searchModel.reset()
-                                        },
-                                    )
+                        },
+                        actions = {
+                            if (!film) {
+                                TextButton(onClick = { showSourceMenu = true }) {
+                                    Text(source.name)
+                                    Icon(Icons.Outlined.ArrowDropDown, contentDescription = "Ganti sumber")
+                                }
+                                DropdownMenu(expanded = showSourceMenu, onDismissRequest = { showSourceMenu = false }) {
+                                    StreamSources.all.forEach { s ->
+                                        DropdownMenuItem(
+                                            text = { Text(s.name) },
+                                            onClick = {
+                                                activeSourceId = s.id
+                                                StreamPrefs.setActiveSourceId(s.id)
+                                                showSourceMenu = false
+                                                searchModel.reset()
+                                            },
+                                        )
+                                    }
+                                }
+                                IconButton(onClick = { showDomainDialog = true }) {
+                                    Icon(Icons.Outlined.Edit, contentDescription = "Edit domain")
                                 }
                             }
-                            IconButton(onClick = { showDomainDialog = true }) {
-                                Icon(Icons.Outlined.Settings, contentDescription = "Edit domain")
+                            IconButton(onClick = { navigator.push(SettingsScreen()) }) {
+                                Icon(Icons.Outlined.Settings, contentDescription = "Settings")
                             }
                         },
                     )
-                    TabRow(selectedTabIndex = pagerState.currentPage) {
+                    val pager = if (film) filmPager else streamPager
+                    val titles = if (film) filmTabs.map { stringResource(it.titleRes) } else streamTitles
+                    TabRow(selectedTabIndex = pager.currentPage) {
                         titles.forEachIndexed { index, title ->
                             Tab(
-                                selected = pagerState.currentPage == index,
-                                onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
+                                selected = pager.currentPage == index,
+                                onClick = { scope.launch { pager.animateScrollToPage(index) } },
                                 text = { Text(title) },
                             )
                         }
@@ -142,17 +183,26 @@ data object StreamTab : Tab {
                 }
             },
         ) { contentPadding ->
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize().padding(contentPadding),
-            ) { page ->
-                val active = pagerState.currentPage == page
-                when (page) {
-                    0 -> SearchContent(searchModel, source, reloadTick)
-                    1 -> FavoriteContent()
-                    2 -> HistoryContent()
-                    3 -> OfflineContent(active)
-                    else -> QueueContent()
+            if (film) {
+                HorizontalPager(
+                    state = filmPager,
+                    modifier = Modifier.fillMaxSize().padding(contentPadding),
+                ) { page ->
+                    filmTabs[page].content(PaddingValues(0.dp), snackbarHostState)
+                }
+            } else {
+                HorizontalPager(
+                    state = streamPager,
+                    modifier = Modifier.fillMaxSize().padding(contentPadding),
+                ) { page ->
+                    val active = streamPager.currentPage == page
+                    when (page) {
+                        0 -> SearchContent(searchModel, source, reloadTick)
+                        1 -> FavoriteContent()
+                        2 -> HistoryContent()
+                        3 -> OfflineContent(active)
+                        else -> QueueContent()
+                    }
                 }
             }
         }
@@ -164,11 +214,22 @@ data object StreamTab : Tab {
                 onSaved = {
                     searchModel.reset()
                     reloadTick++
-                    scope.launch { pagerState.animateScrollToPage(0) }
+                    scope.launch { streamPager.animateScrollToPage(0) }
                 },
             )
         }
     }
+}
+
+@Composable
+private fun ModeTab(text: String, selected: Boolean, onClick: () -> Unit) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+        color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.clickable(onClick = onClick),
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

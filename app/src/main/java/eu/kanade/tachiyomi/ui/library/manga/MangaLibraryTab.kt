@@ -78,10 +78,11 @@ data object MangaLibraryTab : Tab {
                 // index 2 (even): History -> animeSearchQuery (relabel; fork's label_history == "Manga")
                 combinedHistoryTab(context, fromMore = false, screenModel = historyScreenModel)
                     .copy(titleRes = AYMR.strings.label_recent),
-                // index 3 (odd): Downloads -> mangaSearchQuery
-                downloadsTab(context, fromMore = false, screenModel = downloadsScreenModel),
-                // index 4: Download queue (no search)
-                mangaQueueInnerTab(queueScreenModel),
+                // index 3 (odd): Downloads -> mangaSearchQuery (relabel: "Offline")
+                downloadsTab(context, fromMore = false, screenModel = downloadsScreenModel)
+                    .copy(titleRes = AYMR.strings.label_offline),
+                // index 4: Download queue (no search) (relabel: "Queue")
+                mangaQueueInnerTab(queueScreenModel).copy(titleRes = AYMR.strings.label_queue),
             ),
             mangaSearchQuery = downloadsSearchQuery,
             onChangeMangaSearchQuery = downloadsScreenModel::search,

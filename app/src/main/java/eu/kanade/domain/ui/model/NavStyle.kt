@@ -38,9 +38,8 @@ enum class NavStyle(
 
     val tabs: List<Tab>
         get() {
-            // MoreTab is no longer a bottom-nav destination — it lives as a tab inside Browse.
+            // Film (AnimeLibraryTab) is folded into StreamTab's header toggle; More lives in Browse.
             return mutableListOf(
-                AnimeLibraryTab,
                 MangaLibraryTab,
                 NovelTab,
                 YouTubeTab,

@@ -388,9 +388,11 @@
     <string name="label_saved">Saved</string>
     <string name="label_upload">Upload</string>
     <string name="label_recent">Recent</string>
+    <string name="label_queue">Queue</string>
+    <string name="label_offline">Offline</string>
     <string name="label_novel">Novel</string>
     <string name="label_novel_browse">Browse</string>
-    <string name="label_novel_downloaded">Download</string>
+    <string name="label_novel_downloaded">Offline</string>
     <string name="label_novel_queue">Queue</string>
     <string name="label_updates_title">Updates</string>
     <string name="label_novel_search_hint">Search novels…</string>
