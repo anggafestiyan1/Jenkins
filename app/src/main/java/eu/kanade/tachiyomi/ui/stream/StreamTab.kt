@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.ui.stream
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +36,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -262,14 +265,33 @@ private fun DomainDialog(source: StreamSource, onDismiss: () -> Unit, onSaved: (
     )
 }
 
+private enum class TypeFilter { ALL, MOVIE, SERIES }
+
+// Curated genres (slug = the site's /genre/<slug>).
+private val STREAM_GENRES = listOf(
+    "Action" to "action", "Adventure" to "adventure", "Animation" to "animation",
+    "Comedy" to "comedy", "Crime" to "crime", "Documentary" to "documentary",
+    "Drama" to "drama", "Family" to "family", "Fantasy" to "fantasy",
+    "Horror" to "horror", "Mystery" to "mystery", "Romance" to "romance",
+    "Sci-Fi" to "science-fiction", "Thriller" to "thriller", "War" to "war",
+    "Western" to "western", "Action & Adventure" to "action-and-adventure",
+    "Sci-Fi & Fantasy" to "sci-fi-and-fantasy", "Kids" to "kids",
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SearchContent(model: StreamSearchScreenModel, source: StreamSource, reloadTick: Int) {
     val state by model.state.collectAsState()
     val navigator = LocalNavigator.currentOrThrow
 
-    // Reload on first open, on source switch, and whenever the domain is changed (reloadTick).
+    var type by remember { mutableStateOf(TypeFilter.ALL) }
+    var genre by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var genreMenu by remember { mutableStateOf(false) }
+
+    // Reset filters + reload on source switch / domain change.
     LaunchedEffect(source.id, reloadTick) {
+        type = TypeFilter.ALL
+        genre = null
         model.loadPopular(source)
     }
 
@@ -281,22 +303,67 @@ private fun SearchContent(model: StreamSearchScreenModel, source: StreamSource, 
             singleLine = true,
             placeholder = { Text("Cari film / series / drakor…") },
             trailingIcon = {
-                IconButton(onClick = { model.submit(source) }) {
+                IconButton(onClick = { genre = null; model.submit(source) }) {
                     Icon(Icons.Outlined.Search, contentDescription = "Search")
                 }
             },
-            keyboardActions = KeyboardActions(onSearch = { model.submit(source) }),
+            keyboardActions = KeyboardActions(onSearch = { genre = null; model.submit(source) }),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         )
+
+        // Filters: type (All/Movie/Series) + genre dropdown. Horizontally scrollable, no clipping.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FilterChip(selected = type == TypeFilter.ALL, onClick = { type = TypeFilter.ALL }, label = { Text("Semua") })
+            FilterChip(selected = type == TypeFilter.MOVIE, onClick = { type = TypeFilter.MOVIE }, label = { Text("Movie") })
+            FilterChip(selected = type == TypeFilter.SERIES, onClick = { type = TypeFilter.SERIES }, label = { Text("Series") })
+            Box {
+                FilterChip(
+                    selected = genre != null,
+                    onClick = { genreMenu = true },
+                    label = { Text(genre?.first ?: "Genre") },
+                    trailingIcon = { Icon(Icons.Outlined.ArrowDropDown, contentDescription = null) },
+                )
+                DropdownMenu(expanded = genreMenu, onDismissRequest = { genreMenu = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Semua genre") },
+                        onClick = { genre = null; genreMenu = false; model.loadPopular(source) },
+                    )
+                    STREAM_GENRES.forEach { g ->
+                        DropdownMenuItem(
+                            text = { Text(g.first) },
+                            onClick = { genre = g; genreMenu = false; model.loadGenre(source, g.second) },
+                        )
+                    }
+                }
+            }
+        }
+
+        val shown = remember(state.results, type) {
+            state.results.filter {
+                when (type) {
+                    TypeFilter.ALL -> true
+                    TypeFilter.MOVIE -> !it.isSeries
+                    TypeFilter.SERIES -> it.isSeries
+                }
+            }
+        }
+
         Box(Modifier.fillMaxSize()) {
             when {
                 state.isLoading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                state.results.isEmpty() -> Text(
-                    text = state.error ?: "Ketik kata kunci lalu cari.",
+                shown.isEmpty() -> Text(
+                    text = state.error ?: "Tidak ada hasil untuk filter ini.",
                     modifier = Modifier.align(Alignment.Center).padding(24.dp),
                 )
                 else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(8.dp)) {
-                    items(state.results, key = { it.url }) { item ->
+                    items(shown, key = { it.url }) { item ->
                         PosterRow(
                             title = item.title,
                             subtitle = item.year,
@@ -517,6 +584,23 @@ class StreamSearchScreenModel : StateScreenModel<StreamSearchScreenModel.State>(
             } catch (e: Throwable) {
                 logcat(LogPriority.ERROR, e)
                 mutableState.update { it.copy(isLoading = false, error = "Gagal memuat: ${e.message}") }
+            }
+        }
+    }
+
+    fun loadGenre(source: StreamSource, genreSlug: String) {
+        screenModelScope.launchIO {
+            mutableState.update { it.copy(isLoading = true, error = null, query = "") }
+            try {
+                val results = source.byGenre(genreSlug)
+                mutableState.update {
+                    it.copy(isLoading = false, results = results, error = if (results.isEmpty()) "Genre kosong." else null)
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR, e)
+                mutableState.update { it.copy(isLoading = false, error = "Gagal memuat genre: ${e.message}") }
             }
         }
     }

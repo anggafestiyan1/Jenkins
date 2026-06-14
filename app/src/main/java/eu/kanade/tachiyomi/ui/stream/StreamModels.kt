@@ -53,6 +53,7 @@ interface StreamSource {
 
     suspend fun popular(page: Int): List<StreamItem>
     suspend fun search(query: String, page: Int): List<StreamItem>
+    suspend fun byGenre(genreSlug: String): List<StreamItem>
     suspend fun detail(item: StreamItem): StreamDetail
 
     /** Direct/playable video sources. MP4 → playable in VideoView + downloadable. */
@@ -115,7 +116,16 @@ abstract class StreamSiteSource : StreamSource {
 
     override suspend fun popular(page: Int): List<StreamItem> {
         if (page > 1) return emptyList()
-        val d = doc("$baseUrl/movies")
+        // Homepage carries a far richer mixed listing (movies + series) than /movies alone.
+        val d = doc("$baseUrl/")
+        return parseNextCards(d).ifEmpty {
+            runCatching { parseNextCards(doc("$baseUrl/movies")) }.getOrNull()?.takeIf { it.isNotEmpty() }
+                ?: parseGenericCards(d)
+        }
+    }
+
+    override suspend fun byGenre(genreSlug: String): List<StreamItem> {
+        val d = doc("$baseUrl/genre/$genreSlug")
         return parseNextCards(d).ifEmpty { parseGenericCards(d) }
     }
 
